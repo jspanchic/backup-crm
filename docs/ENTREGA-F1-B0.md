@@ -10,7 +10,7 @@ recibirá el repositorio por transferencia. No se ha creado ningún recurso remo
 
 ## Preparado localmente
 
-- [x] Rama `codex/f1-b0-repo-base`.
+- [x] Rama `f1-b0-repo-base` (renombrada por solicitud del responsable).
 - [x] Atomic CRM v1.6.0 importado con git subtree y hash registrado.
 - [x] Licencia MIT intacta, LICENSE propio y NOTICE.
 - [x] Estructura core-api, db, infra, n8n, docs y .github.

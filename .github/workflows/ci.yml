@@ -1,9 +1,8 @@
 name: CI
 on:
   push:
-    branches: [main, 'codex/**']
   pull_request:
-    branches: [main]
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -14,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
       - name: Install verified gitleaks
@@ -29,7 +28,7 @@ jobs:
           mkdir -p gitleaks-bin
           tar -xzf gitleaks_8.30.1_linux_x64.tar.gz -C gitleaks-bin gitleaks
           echo "$RUNNER_TEMP/gitleaks-bin" >> "$GITHUB_PATH"
-      - run: gitleaks git --redact --verbose
+      - run: gitleaks git --redact --verbose --log-opts="--all"
   backoffice:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -37,8 +36,8 @@ jobs:
       run:
         working-directory: backoffice
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -46,7 +45,9 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run lint
       - run: npm exec playwright install --with-deps chromium-headless-shell
+        if: github.event_name == 'pull_request' && (github.base_ref == 'develop' || github.base_ref == 'main')
       - run: npm run test:unit:app -- --run --project app --maxWorkers=2
+        if: github.event_name == 'pull_request' && (github.base_ref == 'develop' || github.base_ref == 'main')
         env:
           CI: 'true'
       - run: npm run build:demo

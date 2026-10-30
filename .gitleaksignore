@@ -1,8 +1,14 @@
 # Six reviewed local Supabase/test fixtures in the immutable upstream squash.
 # Fingerprints apply only to these lines in this exact commit, never new code.
+# Falso positivo: clave publicable del Supabase local de desarrollo; fixture pública del upstream, no secreto de Salvionix.
 9e6385047349f377950310f8285e56051afc3a51:.env.development:generic-api-key:4
+# Falso positivo: JWT de prueba con emisor supabase-demo para Supabase local E2E; no usar en producción.
 9e6385047349f377950310f8285e56051afc3a51:.env.e2e:jwt:7
+# Falso positivo: misma clave publicable local en configuración E2E, publicada por el upstream.
 9e6385047349f377950310f8285e56051afc3a51:.env.e2e:generic-api-key:4
+# Falso positivo: clave publicable de Supabase local para las funciones de referencia, no credencial privada.
 9e6385047349f377950310f8285e56051afc3a51:supabase/functions/.env:generic-api-key:11
+# Falso positivo: Basic Auth testuser:testpwd en un comentario de curl contra localhost; ejemplo público de prueba.
 9e6385047349f377950310f8285e56051afc3a51:supabase/functions/postmark/index.ts:curl-auth-header:253
+# Falso positivo: segundo ejemplo comentado de curl contra localhost con el mismo testuser:testpwd público.
 9e6385047349f377950310f8285e56051afc3a51:supabase/functions/postmark/index.ts:curl-auth-header:338
