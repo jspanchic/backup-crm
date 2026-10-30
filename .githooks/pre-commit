@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+root=$(git rev-parse --show-toplevel)
+if command -v gitleaks >/dev/null 2>&1; then
+  exec gitleaks git --pre-commit --staged --redact --verbose
+elif [ -x "$root/.tools/gitleaks/gitleaks.exe" ]; then
+  exec "$root/.tools/gitleaks/gitleaks.exe" git --pre-commit --staged --redact --verbose
+else
+  echo 'Instala gitleaks >= 8.19 antes de hacer commits. Consulta docs/DESARROLLO.md.' >&2
+  exit 1
+fi
