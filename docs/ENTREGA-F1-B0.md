@@ -43,10 +43,12 @@ bundle; no impidieron la compilación. ESLint avisa de `.eslintignore` obsoleto.
 
 ## Observación de la copia local
 
-Después de la importación apareció eliminado
-`backoffice/.devcontainer/claude-code/install.sh`, sin una eliminación ejecutada
-como parte de esta tarea. La eliminación se deja sin incluir en los commits;
-el archivo sigue en el historial de upstream. No afecta al modo demo.
+Se quitó `backoffice/.devcontainer/`: no usamos devcontainers y Kaspersky
+detecta `install.sh` como `HEUR:Trojan-Downloader` (detección heurística de
+scripts instaladores). Repetir en cada `git subtree pull`, según UPSTREAM.md.
+El archivo no se restauró ni se leyó. La carpeta se retiró del índice y del
+disco sin errores de permisos; el contenido original permanece en el historial
+de upstream. La demo no requiere devcontainers.
 
 ## GitHub Project previsto
 

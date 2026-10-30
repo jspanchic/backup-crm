@@ -17,6 +17,10 @@ con código de tarea y ejecutar desde una copia limpia:
 git subtree pull --prefix=backoffice https://github.com/marmelab/atomic-crm.git <nueva-version> --squash
 ```
 
+Después de cada `git subtree pull`, retirar de nuevo `backoffice/.devcontainer/`
+del índice y del disco antes de validar y crear el PR. Si aparece `Permission
+denied`, detenerse y avisar; no restaurar ni leer el script en cuarentena.
+
 Actualizar este registro con versión, fecha y hash. Validar demo, lint y pruebas;
 abrir PR para revisión. `backoffice/supabase/` es referencia y no se despliega.
 
@@ -35,3 +39,4 @@ No reutilizar estas credenciales de prueba en un despliegue real.
 | Archivo | Motivo y cambio | Commit |
 | --- | --- | --- |
 | `backoffice/src/components/atomic-crm/providers/commons/getContactAvatar.test.ts` | Corregir dos fallos del upstream (`mockResolvedValue is not a function`). Simular fetch de Gravatar y favicons y reiniciarlo en cada caso para obtener pruebas deterministas, sin mock de módulos ni cambios en la lógica de producción. | `417004f0b1a3e0b0b98aa01c889f750b44f9d378` |
+| `backoffice/.devcontainer/` | Se quitó la carpeta completa porque no usamos devcontainers y Kaspersky detecta `install.sh` como `HEUR:Trojan-Downloader` (detección heurística de scripts instaladores). Repetir en cada `git subtree pull`. | `chore(backoffice): F1-B0 quita .devcontainer de upstream` |
