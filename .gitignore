@@ -11,3 +11,5 @@ node_modules/
 dist/
 .tools/
 *.log
+.vitest-attachments/
+__screenshots__/

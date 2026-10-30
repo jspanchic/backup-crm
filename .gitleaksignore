@@ -1,0 +1,8 @@
+# Six reviewed local Supabase/test fixtures in the immutable upstream squash.
+# Fingerprints apply only to these lines in this exact commit, never new code.
+9e6385047349f377950310f8285e56051afc3a51:.env.development:generic-api-key:4
+9e6385047349f377950310f8285e56051afc3a51:.env.e2e:jwt:7
+9e6385047349f377950310f8285e56051afc3a51:.env.e2e:generic-api-key:4
+9e6385047349f377950310f8285e56051afc3a51:supabase/functions/.env:generic-api-key:11
+9e6385047349f377950310f8285e56051afc3a51:supabase/functions/postmark/index.ts:curl-auth-header:253
+9e6385047349f377950310f8285e56051afc3a51:supabase/functions/postmark/index.ts:curl-auth-header:338

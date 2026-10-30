@@ -1,0 +1,54 @@
+name: CI
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install verified gitleaks
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=https://github.com/gitleaks/gitleaks/releases/download/v8.30.1
+          cd "$RUNNER_TEMP"
+          curl -fsSLO "$base/gitleaks_8.30.1_linux_x64.tar.gz"
+          curl -fsSLO "$base/gitleaks_8.30.1_checksums.txt"
+          grep ' gitleaks_8.30.1_linux_x64.tar.gz$' gitleaks_8.30.1_checksums.txt | sha256sum -c -
+          mkdir -p gitleaks-bin
+          tar -xzf gitleaks_8.30.1_linux_x64.tar.gz -C gitleaks-bin gitleaks
+          echo "$RUNNER_TEMP/gitleaks-bin" >> "$GITHUB_PATH"
+      - run: gitleaks git --redact --verbose
+  backoffice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backoffice
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: backoffice/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+      - run: npm exec playwright install --with-deps chromium-headless-shell
+      - run: npm run test:unit:app -- --run --project app --maxWorkers=2
+        env:
+          CI: 'true'
+      - run: npm run build:demo
+        env:
+          NODE_ENV: CI
