@@ -98,7 +98,7 @@ export const useImportFromJson = (): [
   const { data: currentSale } = useGetIdentity();
   const dataProvider = useDataProvider<CrmDataProvider>();
   const refresh = useRefresh();
-  const { companySectors } = useConfigurationContext();
+  const { companySectors } = useConfigurationContext(false);
   const [state, setState] = useState<ImportFromJsonState>({
     status: "idle",
     error: null,

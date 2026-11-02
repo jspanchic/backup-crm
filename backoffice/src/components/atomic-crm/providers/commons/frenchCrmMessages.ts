@@ -198,6 +198,24 @@ export const frenchCrmMessages = {
         amount: "Budget",
         expected_closing_date: "Date de clôture prévue",
         stage: "Étape",
+        service_space_type: "Type d'espace",
+        service_address: "Adresse du service",
+        service_space_size: "Taille de l'espace (préciser l'unité)",
+        service_visit_date: "Date de visite",
+        service_visit_time: "Heure de visite",
+      },
+      amount_integer_hint:
+        "Les montants acceptent actuellement uniquement des unités entières, sans centimes.",
+      service_space_types: {
+        home: "Domicile",
+        office_warehouse: "Bureau ou entrepôt",
+        restaurant_kitchen: "Restaurant ou cuisine",
+        clinic: "Clinique ou cabinet médical",
+        veterinary: "Vétérinaire ou espace pour animaux",
+        gym: "Salle de sport",
+        school_daycare: "École ou garderie",
+        hotel_rental: "Hôtel ou location",
+        other: "Autre",
       },
       action: {
         back_to_deal: "Retour à l'affaire",
@@ -206,6 +224,7 @@ export const frenchCrmMessages = {
       },
       field_categories: {
         misc: "Divers",
+        service: "Détails du service",
       },
       filters: {
         only_mine: "Seulement les affaires que je gère",
@@ -236,6 +255,12 @@ export const frenchCrmMessages = {
         title: "Importer des affaires",
       },
       invalid_date: "Date invalide",
+      followup_contact_required:
+        "Ajoutez un contact valide avant de marquer cette affaire comme gagnée afin de créer une tâche de suivi.",
+      followup_hint:
+        "Une tâche de suivi est créée pour aujourd'hui lorsque l'affaire est gagnée pour la première fois. Vous pouvez la replanifier.",
+      followup_save_error:
+        "Impossible de modifier cette affaire. Vérifiez le contact et réessayez.",
     },
     notes: {
       name: "Note |||| Notes",
@@ -433,7 +458,7 @@ export const frenchCrmMessages = {
       load_more: "Charger plus d'activité",
     },
     dashboard: {
-      deals_chart: "Revenus des affaires à venir",
+      deals_chart: "Montants des opportunités",
       deals_pipeline: "Pipeline des affaires",
       latest_activity: "Dernière activité",
       latest_activity_error:
@@ -462,6 +487,8 @@ export const frenchCrmMessages = {
       sample_download: "Télécharger un exemple CSV",
       sample_hint:
         "Voici un exemple de fichier CSV que vous pouvez utiliser comme modèle",
+      won_needs_contact:
+        "L'import CSV ne lie pas les contacts. Importez les affaires à une étape précédente, ajoutez un contact, puis marquez-les comme gagnées. Les lignes déjà gagnées ne sont pas importées.",
       start: "Démarrer l'import",
       stop: "Arrêter l'importation",
       stopped:

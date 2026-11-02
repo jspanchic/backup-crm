@@ -42,13 +42,17 @@ export function ActivityLogDealCreated({
           )}{" "}
           {context !== "company" && (
             <>
-              {translate("crm.activity.to")}{" "}
-              <ReferenceField
-                source="company_id"
-                reference="companies"
-                record={activity}
-                link="show"
-              />{" "}
+              {activity.company_id != null && (
+                <>
+                  {translate("crm.activity.to")}{" "}
+                  <ReferenceField
+                    source="company_id"
+                    reference="companies"
+                    record={activity}
+                    link="show"
+                  />{" "}
+                </>
+              )}
               <RelativeDate date={activity.date} />
             </>
           )}

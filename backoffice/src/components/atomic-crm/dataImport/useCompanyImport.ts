@@ -12,7 +12,7 @@ import type { ImportCell, ProcessImportBatch } from "./types";
  * left empty — except `name`, which the database requires.
  */
 export function useCompanyImport(): ProcessImportBatch {
-  const { companySectors } = useConfigurationContext();
+  const { companySectors } = useConfigurationContext(false);
   const { identity } = useGetIdentity();
   const dataProvider = useDataProvider();
 
