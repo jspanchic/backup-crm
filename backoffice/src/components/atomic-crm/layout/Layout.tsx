@@ -13,7 +13,10 @@ export const Layout = ({ children }: { children: ReactNode }) => {
   return (
     <DataImportProvider>
       <Header />
-      <main className="max-w-screen-xl mx-auto p-4" id="main-content">
+      <main
+        className="mx-auto max-w-[1440px] px-4 py-6 lg:px-8 lg:py-8"
+        id="main-content"
+      >
         <ErrorBoundary FallbackComponent={Error}>
           <Suspense fallback={<Skeleton className="h-12 w-12 rounded-full" />}>
             {children}

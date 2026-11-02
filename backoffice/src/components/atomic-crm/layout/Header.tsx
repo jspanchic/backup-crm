@@ -1,4 +1,13 @@
-import { FileText, Import, Settings, User, Users } from "lucide-react";
+import {
+  Building2,
+  FileText,
+  Handshake,
+  Import,
+  LayoutDashboard,
+  Settings,
+  User,
+  Users,
+} from "lucide-react";
 import { CanAccess, useTranslate, useUserMenu } from "ra-core";
 import { Link, matchPath, useLocation } from "react-router";
 import { RefreshButton } from "@/components/admin/refresh-button";
@@ -32,31 +41,39 @@ const Header = () => {
   return (
     <>
       <nav className="grow">
-        <header className="bg-secondary">
-          <div className="px-4">
-            <div className="flex justify-between items-center flex-1">
+        <header className="border-b border-[#1c3349] bg-[#07131f] text-[#f2fbf8] shadow-[0_10px_30px_rgba(2,12,20,0.12)]">
+          <div className="mx-auto max-w-[1600px] px-4 lg:px-6">
+            <div className="flex min-h-18 items-center justify-between gap-3">
               <Link
                 to="/"
-                className="flex items-center gap-2 text-secondary-foreground no-underline"
+                className="flex shrink-0 items-center gap-2.5 text-[#f2fbf8] no-underline"
               >
                 <img
-                  className="[.light_&]:hidden h-6"
+                  className="[.light_&]:hidden h-8 w-8 object-contain"
                   src={darkModeLogo}
                   alt={title}
                 />
                 <img
-                  className="[.dark_&]:hidden h-6"
+                  className="[.dark_&]:hidden h-8 w-8 object-contain"
                   src={lightModeLogo}
                   alt={title}
                 />
-                <h1 className="text-xl font-semibold">{title}</h1>
+                <h1 className="hidden whitespace-nowrap text-base font-bold tracking-tight xl:block">
+                  {title}
+                </h1>
               </Link>
-              <div>
-                <nav className="flex">
+              <div className="min-w-0">
+                <nav
+                  className="flex items-center gap-1"
+                  aria-label={translate("crm.navigation.label", {
+                    _: "Main navigation",
+                  })}
+                >
                   <NavigationTab
                     label={translate("ra.page.dashboard")}
                     to="/"
                     isActive={currentPath === "/"}
+                    Icon={LayoutDashboard}
                   />
                   <NavigationTab
                     label={translate("resources.contacts.name", {
@@ -64,6 +81,7 @@ const Header = () => {
                     })}
                     to="/contacts"
                     isActive={currentPath === "/contacts"}
+                    Icon={Users}
                   />
                   <NavigationTab
                     label={translate("resources.companies.name", {
@@ -71,6 +89,7 @@ const Header = () => {
                     })}
                     to="/companies"
                     isActive={currentPath === "/companies"}
+                    Icon={Building2}
                   />
                   <NavigationTab
                     label={translate("resources.deals.name", {
@@ -78,10 +97,11 @@ const Header = () => {
                     })}
                     to="/deals"
                     isActive={currentPath === "/deals"}
+                    Icon={Handshake}
                   />
                 </nav>
               </div>
-              <div className="flex items-center">
+              <div className="flex shrink-0 items-center gap-0.5 [&>button]:text-[#d3e4e2] [&>button:hover]:bg-[#173448] [&>button:first-child]:border-[#294255] [&>button:first-child]:bg-[#11263b] [&_kbd]:border-[#294255] [&_kbd]:bg-[#1c3349] [&_kbd]:text-[#d3e4e2]">
                 <GlobalSearchButton />
                 <ThemeModeToggle />
                 <RefreshButton />
@@ -109,19 +129,23 @@ const NavigationTab = ({
   label,
   to,
   isActive,
+  Icon,
 }: {
   label: string;
   to: string;
   isActive: boolean;
+  Icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
 }) => (
   <Link
     to={to}
-    className={`px-6 py-3 text-sm font-medium transition-colors border-b-2 ${
+    aria-current={isActive ? "page" : undefined}
+    className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors lg:px-3 ${
       isActive
-        ? "text-secondary-foreground border-secondary-foreground"
-        : "text-secondary-foreground/70 border-transparent hover:text-secondary-foreground/80"
+        ? "bg-[#2fc9a0]/15 text-[#65e5c2]"
+        : "text-[#a9bdc0] hover:bg-[#11263b] hover:text-[#f2fbf8]"
     }`}
   >
+    <Icon className="hidden h-4 w-4 xl:block" aria-hidden="true" />
     {label}
   </Link>
 );

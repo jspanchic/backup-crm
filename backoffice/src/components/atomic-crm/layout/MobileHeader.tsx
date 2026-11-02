@@ -13,9 +13,9 @@ const MobileHeader = ({
   showRefresh?: boolean;
 }) => {
   return (
-    <header className="fixed top-0 left-0 right-0 z-10 bg-secondary h-14 px-4 w-full flex justify-between items-center">
+    <header className="fixed top-0 left-0 right-0 z-10 flex h-14 w-full items-center justify-between border-b border-[#1c3349] bg-[#07131f] px-4 text-[#f2fbf8] [&_.text-secondary-foreground]:text-[#f2fbf8]">
       {children}
-      <div className="flex items-center">
+      <div className="flex items-center [&>button]:text-[#d3e4e2] [&>button:hover]:bg-[#173448]">
         <GlobalSearchButton variant="icon" />
         {showRefresh ? <MobileRefreshButton /> : null}
       </div>
