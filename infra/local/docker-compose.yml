@@ -1,0 +1,47 @@
+# Local stack for development and tests. Loopback only; never deploy this file.
+# Values come from infra/local/.env (git-ignored), created by core-api/scripts/init-local-env.ts.
+name: salvionix-local
+services:
+  db:
+    image: postgres:17.10
+    environment:
+      POSTGRES_PASSWORD: ${PG_SUPERUSER_PASSWORD:?run npm run local:init in core-api}
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  # PostgREST for the development database. Only core-api talks to it in production.
+  api:
+    image: postgrest/postgrest:v16.4
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment: &postgrest-env
+      PGRST_DB_URI: postgres://authenticator:${AUTHENTICATOR_PASSWORD}@db:5432/salvionix
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: crm_anon
+      PGRST_JWT_SECRET: ${PGRST_JWT_SECRET}
+      PGRST_DB_MAX_ROWS: "1000"
+      PGRST_OPENAPI_MODE: follow-privileges
+    ports:
+      - "127.0.0.1:55300:3000"
+  # Same image against the throwaway test database, so permission tests hit the real thing.
+  api-test:
+    image: postgrest/postgrest:v16.4
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      <<: *postgrest-env
+      PGRST_DB_URI: postgres://authenticator:${AUTHENTICATOR_PASSWORD}@db:5432/salvionix_test
+    ports:
+      - "127.0.0.1:55301:3000"
+volumes:
+  db-data:

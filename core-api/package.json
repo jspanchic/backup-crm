@@ -1,0 +1,30 @@
+{
+  "name": "@salvionix/core-api",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "local:init": "node scripts/init-local-env.ts",
+    "local:up": "docker compose -f ../infra/local/docker-compose.yml --env-file ../infra/local/.env up -d",
+    "local:down": "docker compose -f ../infra/local/docker-compose.yml --env-file ../infra/local/.env down",
+    "db:bootstrap": "node --env-file=../infra/local/.env scripts/db-bootstrap.ts",
+    "db:migrate": "node --env-file=../infra/local/.env scripts/db-migrate.ts",
+    "db:seed": "node --env-file=../infra/local/.env scripts/db-seed.ts",
+    "db:baseline": "node scripts/gen-atomic-baseline.ts",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "pg": "8.23.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "@types/pg": "8.23.1",
+    "typescript": "5.8.3",
+    "vitest": "5.0.5"
+  }
+}
