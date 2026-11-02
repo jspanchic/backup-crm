@@ -2,15 +2,14 @@ import type { ConfigurationContextValue } from "./ConfigurationContext";
 // Import the logos as module assets so Vite resolves their URL relative to the
 // JS chunk (import.meta.url), not the current route. A plain "./logos/..." path
 // breaks on nested routes like /oauth/consent and under a deployment sub-path.
-import darkModeLogo from "./logos/logo_atomic_crm_dark.svg";
-import lightModeLogo from "./logos/logo_atomic_crm_light.svg";
+import salvionixMark from "./logos/salvionix-mark.png";
 
-export const defaultDarkModeLogo = darkModeLogo;
-export const defaultLightModeLogo = lightModeLogo;
+export const defaultDarkModeLogo = salvionixMark;
+export const defaultLightModeLogo = salvionixMark;
 
 export const defaultCurrency = "USD";
 
-export const defaultTitle = "Atomic CRM";
+export const defaultTitle = "Salvionix CRM";
 
 export const defaultCompanySectors = [
   { value: "communication-services", label: "Communication Services" },
@@ -27,22 +26,27 @@ export const defaultCompanySectors = [
 ];
 
 export const defaultDealStages = [
-  { value: "opportunity", label: "Opportunity" },
-  { value: "proposal-sent", label: "Proposal Sent" },
-  { value: "in-negociation", label: "In Negotiation" },
-  { value: "won", label: "Won" },
-  { value: "lost", label: "Lost" },
-  { value: "delayed", label: "Delayed" },
+  { value: "opportunity", label: "Nueva consulta" },
+  { value: "contacted", label: "Contactado" },
+  { value: "assessment", label: "Evaluación del espacio" },
+  { value: "proposal-sent", label: "Propuesta enviada" },
+  { value: "in-negociation", label: "Seguimiento de propuesta" },
+  { value: "won", label: "Servicio contratado" },
+  { value: "lost", label: "No concretado" },
+  { value: "delayed", label: "Aplazado" },
 ];
 
 export const defaultDealPipelineStatuses = ["won"];
 
 export const defaultDealCategories = [
-  { value: "other", label: "Other" },
-  { value: "copywriting", label: "Copywriting" },
-  { value: "print-project", label: "Print project" },
-  { value: "ui-design", label: "UI Design" },
-  { value: "website-design", label: "Website design" },
+  { value: "virus-bacteria", label: "Virus y bacterias" },
+  { value: "food-surfaces", label: "Superficies en contacto con alimentos" },
+  { value: "mold-fungi", label: "Moho y hongos" },
+  { value: "allergens", label: "Alérgenos" },
+  { value: "odors", label: "Olores" },
+  { value: "air-ducts", label: "Aire acondicionado y ductos" },
+  { value: "fabrics", label: "Telas y tapizados" },
+  { value: "other", label: "Otro" },
 ];
 
 export const defaultNoteStatuses = [
@@ -53,15 +57,19 @@ export const defaultNoteStatuses = [
 ];
 
 export const defaultTaskTypes = [
-  { value: "none", label: "None" },
-  { value: "email", label: "Email" },
-  { value: "demo", label: "Demo" },
-  { value: "lunch", label: "Lunch" },
-  { value: "meeting", label: "Meeting" },
-  { value: "follow-up", label: "Follow-up" },
-  { value: "thank-you", label: "Thank you" },
-  { value: "ship", label: "Ship" },
-  { value: "call", label: "Call" },
+  { value: "none", label: "Sin tipo" },
+  { value: "call", label: "Llamada" },
+  { value: "whatsapp", label: "Mensaje de WhatsApp" },
+  { value: "email", label: "Correo electrónico" },
+  { value: "assessment", label: "Evaluar el espacio" },
+  { value: "quotation", label: "Preparar o enviar propuesta" },
+  { value: "appointment", label: "Coordinar visita" },
+  { value: "follow-up", label: "Seguimiento" },
+  { value: "meeting", label: "Reunión" },
+  { value: "thank-you", label: "Agradecimiento" },
+  { value: "demo", label: "Demostración" },
+  { value: "lunch", label: "Almuerzo" },
+  { value: "ship", label: "Envío" },
 ];
 
 export const defaultConfiguration: ConfigurationContextValue = {
