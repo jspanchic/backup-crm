@@ -1,0 +1,35 @@
+ATOMIC CRM - PROYECTO DE DESARROLLO LOCAL
+
+Esta carpeta contiene el repositorio oficial y sus dependencias de frontend.
+El modo completo usa Supabase y PostgreSQL para guardar datos, y Vite para
+actualizar la interfaz al guardar cambios en el codigo.
+
+REQUISITOS
+- El iniciador usa la copia local de Node.js 24 LTS en .tools.
+- WSL 2 y Docker Desktop deben estar instalados y funcionando. Docker
+  Desktop debe estar abierto antes de iniciar el CRM. Windows puede pedir
+  permisos de administrador o un reinicio al terminar su configuracion.
+
+INICIO DESPUES DE INSTALAR LOS REQUISITOS
+1. Abre Docker Desktop y espera a que termine de iniciar.
+2. Haz doble clic en INICIAR-CRM.cmd. La primera vez puede tardar porque
+   Supabase descarga imagenes de contenedores y prepara la base de datos.
+3. Abre http://localhost:5173/ y crea el primer usuario.
+4. Manten abierta la ventana del CRM. Al guardar cambios en el codigo,
+   Vite actualiza la aplicacion automaticamente cuando sea posible.
+
+Supabase usa el puerto local 55321 y su panel esta en
+http://127.0.0.1:55323/. Se cambiaron los puertos porque Windows habia
+reservado el rango original. Conserva .env.development.local para que
+el CRM encuentre la base de datos.
+
+Para detener Vite, presiona Ctrl+C en la ventana del CRM. Supabase sigue
+ejecutandose en Docker hasta que ejecutes en esta carpeta:
+    npx supabase stop
+No uses comandos de reset si deseas conservar los datos.
+
+Codigo principal: src\components\atomic-crm
+Configuracion de la aplicacion: src\App.tsx
+Esquemas de base de datos: supabase\schemas
+Proyecto oficial: https://github.com/marmelab/atomic-crm
+Documentacion: https://marmelab.com/atomic-crm/doc/
