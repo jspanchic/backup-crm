@@ -5,6 +5,7 @@ import {
   toConfiguredValues,
   toInteger,
   toIsoDate,
+  toLocalTime,
   toNumber,
   toText,
 } from "./parseCell";
@@ -39,6 +40,16 @@ describe("toNumber", () => {
   it("returns undefined for an empty or non-numeric cell", () => {
     expect(toNumber(null)).toBeUndefined();
     expect(toNumber("a lot")).toBeUndefined();
+  });
+});
+
+describe("toLocalTime", () => {
+  it("accepts local 24-hour times and leaves empty or invalid cells unset", () => {
+    expect(toLocalTime(" 09:30 ")).toBe("09:30");
+    expect(toLocalTime("17:45:30")).toBe("17:45:30");
+    expect(toLocalTime(null)).toBeUndefined();
+    expect(toLocalTime("25:00")).toBeUndefined();
+    expect(toLocalTime("9:30 PM")).toBeUndefined();
   });
 });
 

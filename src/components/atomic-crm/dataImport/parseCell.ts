@@ -50,6 +50,14 @@ export const toIsoDate = (cell: ImportCell): string | undefined => {
   return iso.startsWith(text) ? iso : undefined;
 };
 
+/** A local wall-clock time in 24-hour format, with optional seconds. */
+export const toLocalTime = (cell: ImportCell): string | undefined => {
+  const text = toText(cell);
+  return text && /^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(text)
+    ? text
+    : undefined;
+};
+
 /**
  * Cell content matched against configured options, so a CSV may carry either the
  * stored value ("proposal-sent") or the label users see ("Proposal Sent").

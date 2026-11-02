@@ -194,6 +194,24 @@ export const englishCrmMessages = {
         amount: "Budget",
         expected_closing_date: "Expected closing date",
         stage: "Stage",
+        service_space_type: "Type of space",
+        service_address: "Service address",
+        service_space_size: "Size of space (include units)",
+        service_visit_date: "Visit date",
+        service_visit_time: "Visit time",
+      },
+      amount_integer_hint:
+        "Amounts currently support whole currency units only, without cents.",
+      service_space_types: {
+        home: "Home",
+        office_warehouse: "Office or warehouse",
+        restaurant_kitchen: "Restaurant or kitchen",
+        clinic: "Clinic or medical office",
+        veterinary: "Veterinary or pet facility",
+        gym: "Gym",
+        school_daycare: "School or daycare",
+        hotel_rental: "Hotel or rental",
+        other: "Other",
       },
       action: {
         back_to_deal: "Back to deal",
@@ -202,6 +220,7 @@ export const englishCrmMessages = {
       },
       field_categories: {
         misc: "Misc",
+        service: "Service details",
       },
       filters: {
         only_mine: "Only deals I manage",
@@ -232,6 +251,12 @@ export const englishCrmMessages = {
         title: "Import deals",
       },
       invalid_date: "Invalid date",
+      followup_contact_required:
+        "Add a valid contact before marking this opportunity as won, so a follow-up task can be created.",
+      followup_hint:
+        "The first time this opportunity is marked as won, a follow-up task is created for today. You can reschedule it.",
+      followup_save_error:
+        "Could not update this opportunity. Check the contact and try again.",
     },
     notes: {
       name: "Note |||| Notes",
@@ -428,7 +453,7 @@ export const englishCrmMessages = {
       load_more: "Load more activity",
     },
     dashboard: {
-      deals_chart: "Upcoming Deal Revenue",
+      deals_chart: "Opportunity amounts",
       deals_pipeline: "Deals Pipeline",
       latest_activity: "Latest Activity",
       latest_activity_error: "Error loading latest activity",
@@ -455,6 +480,8 @@ export const englishCrmMessages = {
       resource: "Resource",
       sample_download: "Download CSV sample",
       sample_hint: "Here is a sample CSV file you can use as a template",
+      won_needs_contact:
+        "CSV import cannot link contacts. Import opportunities in an earlier stage, add a contact, then mark them as won. Rows already marked as won are not imported.",
       start: "Start import",
       stop: "Stop import",
       stopped:

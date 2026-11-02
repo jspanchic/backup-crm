@@ -6,6 +6,11 @@ import { raSupabaseEnglishMessages } from "ra-supabase-language-english";
 import { raSupabaseFrenchMessages } from "ra-supabase-language-french";
 import { englishCrmMessages } from "./englishCrmMessages";
 import { frenchCrmMessages } from "./frenchCrmMessages";
+import { spanishCrmMessages } from "./spanishCrmMessages";
+import {
+  spanishRaMessages,
+  spanishSupabaseMessages,
+} from "./spanishBaseMessages";
 
 const raSupabaseEnglishMessagesOverride = {
   "ra-supabase": {
@@ -57,21 +62,32 @@ const frenchCatalog = mergeTranslations(
   frenchCrmMessages,
 );
 
-export const getInitialLocale = (): "en" | "fr" => {
-  if (typeof navigator === "undefined") {
-    return "en";
-  }
+const spanishCatalog = mergeTranslations(
+  englishCatalog,
+  spanishRaMessages,
+  spanishSupabaseMessages,
+  spanishCrmMessages,
+  {
+    crm: {
+      theme: {
+        toggle: "Cambiar tema",
+        light: "Claro",
+        dark: "Oscuro",
+        system: "Sistema",
+      },
+    },
+  },
+);
 
-  const browserLocale = navigator.languages?.[0] ?? navigator.language;
-  if (browserLocale?.toLowerCase().startsWith("fr")) {
-    return "fr";
-  }
-
-  return "en";
-};
+// Spanish is the default for Salvionix; users can still choose another
+// language in their profile and that choice is persisted by react-admin.
+export const getInitialLocale = (): "es" => "es";
 
 export const i18nProvider = polyglotI18nProvider(
   (locale) => {
+    if (locale === "es") {
+      return spanishCatalog;
+    }
     if (locale === "fr") {
       return frenchCatalog;
     }
@@ -79,6 +95,7 @@ export const i18nProvider = polyglotI18nProvider(
   },
   getInitialLocale(),
   [
+    { locale: "es", name: "Español" },
     { locale: "en", name: "English" },
     { locale: "fr", name: "Français" },
   ],

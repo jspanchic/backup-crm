@@ -128,6 +128,14 @@ export function DataImportDialog({
               </AlertDescription>
             </Alert>
 
+            {resource.name === "deals" && (
+              <Alert>
+                <AlertDescription>
+                  {translate("crm.data_import.won_needs_contact")}
+                </AlertDescription>
+              </Alert>
+            )}
+
             <FileInput
               source="csv"
               label="crm.data_import.csv_file"

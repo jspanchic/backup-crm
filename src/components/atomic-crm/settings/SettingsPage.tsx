@@ -162,7 +162,7 @@ export const SettingsPage = () => {
 SettingsPage.path = "/settings";
 
 const SettingsForm = () => {
-  const config = useConfigurationContext();
+  const config = useConfigurationContext(false);
 
   const defaultValues = useMemo(
     () => ({
