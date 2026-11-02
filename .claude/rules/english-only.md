@@ -17,6 +17,18 @@ the user's chosen `industry: "boulangerie"` or `entity name: "facture"`
 inside `project-context.json` or fake-data fixtures). Even then, prefer
 English when it doesn't change the semantics.
 
+## Exception: Spanish documentation (BYTOGAM decision, 2026-11-02)
+
+Committed documentation for the Spanish-speaking team is written in **Spanish**:
+
+- `docs/**` (audits, ADRs, decision records, runbooks)
+- `CLAUDE.md` at the repo root
+
+Everything else stays English: source code, identifiers, comments, database
+table/column names, migrations, commit messages, PR titles and bodies, hook and
+log strings, and `.claude/` rules, agents and skills. The user-facing UI text is
+Spanish through the i18n catalogs, as before.
+
 ## Speaking another language at runtime
 
 Agents that converse with the user (orchestrator, project-manager,
