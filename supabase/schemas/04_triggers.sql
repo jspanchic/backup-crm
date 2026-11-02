@@ -20,6 +20,10 @@ create or replace trigger set_deal_sales_id_trigger
     before insert on public.deals
     for each row execute function public.set_sales_id_default();
 
+create or replace trigger create_deal_followup_on_win
+    after insert or update of stage, contact_ids on public.deals
+    for each row execute function public.create_deal_followup_on_win();
+
 create or replace trigger set_deal_notes_sales_id_trigger
     before insert on public.deal_notes
     for each row execute function public.set_sales_id_default();

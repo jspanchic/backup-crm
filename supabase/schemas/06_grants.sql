@@ -96,6 +96,9 @@ grant all on table public.tags to service_role;
 
 grant all on table public.tasks to anon;
 grant all on table public.tasks to authenticated;
+revoke all on table public.deal_followup_events from public, anon, authenticated;
+grant select, insert on table public.deal_followup_events to authenticated;
+grant select, insert on table public.deal_followup_events to service_role;
 grant all on table public.tasks to service_role;
 
 grant all on table public.configuration to anon;

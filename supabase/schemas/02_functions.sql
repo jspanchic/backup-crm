@@ -472,3 +472,57 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+CREATE OR REPLACE FUNCTION "public"."create_deal_followup_on_win"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO ''
+    AS $$
+declare
+    selected_contact_id bigint;
+    inserted_deal_id bigint;
+    entering_won boolean;
+begin
+    if new.stage is distinct from 'won' then
+        return new;
+    end if;
+
+    entering_won := tg_op = 'INSERT';
+    if tg_op = 'UPDATE' then
+        entering_won := old.stage is distinct from 'won';
+        if not entering_won and old.contact_ids is not distinct from new.contact_ids then
+            return new;
+        end if;
+    end if;
+
+    select c.id into selected_contact_id
+    from unnest(coalesce(new.contact_ids, '{}'::bigint[])) with ordinality as ids(id, position)
+    join public.contacts c on c.id = ids.id
+    order by ids.position
+    limit 1;
+
+    if selected_contact_id is null then
+        if entering_won then
+            raise exception 'Añade un contacto válido para marcar la oportunidad como ganada y crear la tarea de seguimiento.'
+                using errcode = '23514';
+        end if;
+        return new;
+    end if;
+
+    insert into public.deal_followup_events (deal_id)
+    values (new.id)
+    on conflict (deal_id) do nothing
+    returning deal_id into inserted_deal_id;
+
+    if inserted_deal_id is not null then
+        insert into public.tasks (contact_id, type, text, due_date, sales_id)
+        values (
+            selected_contact_id,
+            'follow-up',
+            'Dar seguimiento al servicio contratado: ' || new.name,
+            now(),
+            new.sales_id
+        );
+    end if;
+    return new;
+end;
+$$;
