@@ -2,7 +2,8 @@
 
 - Repositorio: https://github.com/marmelab/atomic-crm
 - Release: https://github.com/marmelab/atomic-crm/releases/tag/v1.6.0
-- Versión fijada: `v1.6.0` (publicada el 22 de septiembre de 2026).
+- Versión base: `v1.6.0` (publicada el 22 de septiembre de 2026).
+- **Actualización del 02/11/2026:** commit `9a5cb4b974974beb8cad0879cdc3e7a8ae9667af` (`v1.6.0-249-g9a5cb4b9`). **No es una release:** no hay una posterior a v1.6.0, y el trabajo propio ya estaba validado sobre ese commit (decisión de Sebastián). Comando usado: `git subtree pull --prefix=backoffice . refs/remotes/upstream/main --squash` (GitHub no permite traer un SHA abreviado con `git subtree pull <url> <sha>`; se hizo `git fetch upstream` antes). Squash resultante: `5468b58db83e5f9b79e400743c11aafbdfcd8b41`. El `.devcontainer/` no reapareció en esta actualización.
 - Publicación exacta (`published_at` de GitHub): `2026-09-22T20:38:53Z`
   (15:38:53 en Ecuador continental).
 - Importación: 30 de octubre de 2026.
@@ -38,5 +39,7 @@ No reutilizar estas credenciales de prueba en un despliegue real.
 
 | Archivo | Motivo y cambio | Commit |
 | --- | --- | --- |
-| `backoffice/src/components/atomic-crm/providers/commons/getContactAvatar.test.ts` | Corregir dos fallos del upstream (`mockResolvedValue is not a function`). Simular fetch de Gravatar y favicons y reiniciarlo en cada caso para obtener pruebas deterministas, sin mock de módulos ni cambios en la lógica de producción. | `417004f0b1a3e0b0b98aa01c889f750b44f9d378` |
+| `backoffice/src/components/atomic-crm/providers/commons/getContactAvatar.test.ts` | El arreglo propio de F1-B0 **se descartó** en la actualización del 02/11: se tomó la versión del upstream en un conflicto. Si el test falla, reaplicar el arreglo (simular fetch de Gravatar y favicons sin mock de módulos) | `417004f0` (histórico) |
 | `backoffice/.devcontainer/` | Se quitó la carpeta completa porque no usamos devcontainers y Kaspersky detecta `install.sh` como `HEUR:Trojan-Downloader` (detección heurística de scripts instaladores). Repetir en cada `git subtree pull`. | `chore(backoffice): F1-B0 quita .devcontainer de upstream` |
+| Idioma, marca, etapas y categorías, campos de servicio, tarea de seguimiento al ganar, entorno Windows | Trabajo de CRM-T0 reaplicado con `git am --directory=backoffice` sobre el squash de arriba. Archivos: `src/components/atomic-crm/**`, `src/index.css`, `index.html`, `supabase/schemas/01,02,04,05,06`, `supabase/migrations/20261031*`, `supabase/config.toml`, `supabase/functions/.env` (solo `SB_JWT_ISSUER`, URL local), `INICIAR-CRM.cmd` | Ver `git log -- backoffice` |
+| `backoffice/CLAUDE.md`, `AGENTS.md`, `.claude/` | **Sin cambios.** Las reglas propias viven en el `CLAUDE.md` de la raíz | — |

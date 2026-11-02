@@ -58,7 +58,8 @@ Repositorio privado `salvionix-platform` en la cuenta personal del responsable,
 con GitHub Project `Salvionix Platform`. Transferir después a la organización
 de Bytogam, mantenerlo privado y actualizar remotos, enlaces e integraciones.
 
-Una rama por bloque, por ejemplo `codex/f1-b3-core-api-webhooks`. Incluir F1-Bx en
+Una rama de entrega por tarea (`crm-t4-esquema`, `crm-t5-core-api`, ...) y trabajo
+en ramas locales `wip/<id>` que no se suben (ver `CLAUDE.md`). Incluir CRM-Tn en
 commits y PR. Main queda reservado para versiones revisadas. Solicitar revisión
 de Joel antes del merge; registrar cualquier limitación del plan de GitHub.
 Actualizar Excel y evidencia en Discord solo después de completar cada bloque.

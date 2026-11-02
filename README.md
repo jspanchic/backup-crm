@@ -7,7 +7,7 @@ cuando exista. Consulte docs/ENTREGA-F1-B0.md para el estado real de la entrega.
 
 ## Estructura
 
-- `backoffice/`: Atomic CRM v1.6.0, importado con git subtree (MIT).
+- `backoffice/`: Atomic CRM (v1.6.0 + commits hasta 9a5cb4b9), importado con git subtree (MIT).
 - `core-api/`: espacio reservado para Fastify + TypeScript.
 - `db/`: migraciones y funciones SQL propias.
 - `infra/`: configuración de infraestructura sin secretos.
