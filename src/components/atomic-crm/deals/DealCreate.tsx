@@ -27,6 +27,10 @@ export const DealCreate = ({ open }: { open: boolean }) => {
   const queryClient = useQueryClient();
 
   const onSuccess = async (deal: Deal) => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+      queryClient.invalidateQueries({ queryKey: ["contacts_summary"] }),
+    ]);
     if (!allDeals) {
       redirect("/deals");
       return;

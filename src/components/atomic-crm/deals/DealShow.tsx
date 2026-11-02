@@ -6,6 +6,7 @@ import {
   ShowBase,
   useDataProvider,
   useNotify,
+  useLocaleState,
   useRecordContext,
   useRedirect,
   useRefresh,
@@ -54,6 +55,7 @@ export const DealShow = ({ open, id }: { open: boolean; id?: string }) => {
 
 const DealShowContent = () => {
   const translate = useTranslate();
+  const [locale] = useLocaleState();
   const { dealStages, dealCategories, currency } = useConfigurationContext();
   const record = useRecordContext<Deal>();
   if (!record) return null;
@@ -160,6 +162,15 @@ const DealShowContent = () => {
             </div>
           )}
 
+          {record.stage === "won" && !record.contact_ids?.length && (
+            <p
+              className="m-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+              role="status"
+            >
+              {translate("resources.deals.followup_contact_required")}
+            </p>
+          )}
+
           {record.description && (
             <div className="m-4 whitespace-pre-line">
               <span className="text-xs text-muted-foreground tracking-wide">
@@ -167,6 +178,60 @@ const DealShowContent = () => {
               </span>
               <p className="text-sm leading-6">{record.description}</p>
             </div>
+          )}
+
+          {(record.service_space_type ||
+            record.service_address ||
+            record.service_space_size ||
+            record.service_visit_date ||
+            record.service_visit_time) && (
+            <section className="m-4">
+              <Separator className="mb-4" />
+              <h3 className="mb-3 font-semibold">
+                {translate("resources.deals.field_categories.service")}
+              </h3>
+              <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {[
+                  {
+                    key: "service_space_type",
+                    value: record.service_space_type
+                      ? translate(
+                          `resources.deals.service_space_types.${record.service_space_type}`,
+                          { _: record.service_space_type },
+                        )
+                      : null,
+                  },
+                  { key: "service_address", value: record.service_address },
+                  {
+                    key: "service_space_size",
+                    value: record.service_space_size,
+                  },
+                  {
+                    key: "service_visit_date",
+                    value: record.service_visit_date
+                      ? new Intl.DateTimeFormat(locale || "es").format(
+                          new Date(`${record.service_visit_date}T00:00:00`),
+                        )
+                      : null,
+                  },
+                  {
+                    key: "service_visit_time",
+                    value: record.service_visit_time?.slice(0, 5),
+                  },
+                ]
+                  .filter(({ value }) => value)
+                  .map(({ key, value }) => (
+                    <div key={key} className="min-w-0">
+                      <dt className="text-xs text-muted-foreground">
+                        {translate(`resources.deals.fields.${key}`)}
+                      </dt>
+                      <dd className="whitespace-pre-line break-words text-sm">
+                        {value}
+                      </dd>
+                    </div>
+                  ))}
+              </dl>
+            </section>
           )}
 
           <div className="m-4">

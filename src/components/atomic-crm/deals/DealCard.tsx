@@ -57,12 +57,16 @@ export const DealCardContent = ({
           <CardContent className="px-3 flex flex-col">
             <div className="flex-1 flex">
               <p className="flex-1 text-sm font-medium mb-2">
-                <ReferenceField
-                  source="company_id"
-                  reference="companies"
-                  link={false}
-                />
-                {" - "}
+                {deal.company_id != null && (
+                  <>
+                    <ReferenceField
+                      source="company_id"
+                      reference="companies"
+                      link={false}
+                    />
+                    {" - "}
+                  </>
+                )}
                 {deal.name}
               </p>
               <ReferenceField
