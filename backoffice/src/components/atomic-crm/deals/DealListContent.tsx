@@ -1,6 +1,13 @@
 import { DragDropContext, type OnDragEndResponder } from "@hello-pangea/dnd";
 import isEqual from "lodash/isEqual";
-import { useDataProvider, useListContext, type DataProvider } from "ra-core";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useDataProvider,
+  useListContext,
+  useNotify,
+  useTranslate,
+  type DataProvider,
+} from "ra-core";
 import { useEffect, useState } from "react";
 
 import { useConfigurationContext } from "../root/ConfigurationContext";
@@ -13,6 +20,9 @@ export const DealListContent = () => {
   const { dealStages } = useConfigurationContext();
   const { data: unorderedDeals, isPending, refetch } = useListContext<Deal>();
   const dataProvider = useDataProvider();
+  const queryClient = useQueryClient();
+  const notify = useNotify();
+  const translate = useTranslate();
 
   const [dealsByStage, setDealsByStage] = useState<DealsByStage>(
     getDealsByStage([], dealStages),
@@ -47,6 +57,14 @@ export const DealListContent = () => {
     const sourceStage = source.droppableId;
     const destinationStage = destination.droppableId;
     const sourceDeal = dealsByStage[sourceStage][source.index]!;
+    if (
+      destinationStage === "won" &&
+      sourceStage !== "won" &&
+      !sourceDeal.contact_ids?.length
+    ) {
+      notify("resources.deals.followup_contact_required", { type: "warning" });
+      return;
+    }
     const destinationDeal = dealsByStage[destinationStage][
       destination.index
     ] ?? {
@@ -65,9 +83,24 @@ export const DealListContent = () => {
     );
 
     // persist the changes
-    updateDealStage(sourceDeal, destinationDeal, dataProvider).then(() => {
-      refetch();
-    });
+    updateDealStage(sourceDeal, destinationDeal, dataProvider)
+      .then(async () => {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+          queryClient.invalidateQueries({ queryKey: ["contacts_summary"] }),
+        ]);
+        await refetch();
+      })
+      .catch(async (error: unknown) => {
+        const message = error instanceof Error ? error.message : "";
+        notify(
+          message.includes("contacto válido")
+            ? translate("resources.deals.followup_contact_required")
+            : translate("resources.deals.followup_save_error"),
+          { type: "error" },
+        );
+        await refetch();
+      });
   };
 
   return (
@@ -210,6 +243,15 @@ const updateDealStage = async (
       ]);
     const destinationIndex = destination.index ?? destinationDeals.length + 1;
 
+    // Validate and move the selected opportunity before changing other indexes.
+    // If the backend rejects it (for example, no valid contact), no other
+    // opportunity in either column is modified.
+    await dataProvider.update("deals", {
+      id: source.id,
+      data: { index: destinationIndex, stage: destination.stage },
+      previousData: source,
+    });
+
     await Promise.all([
       // decrease index on the deals after the source index in the source columns
       ...sourceDeals
@@ -231,15 +273,6 @@ const updateDealStage = async (
             previousData: deal,
           }),
         ),
-      // change the dragged deal to take the destination index and column
-      dataProvider.update("deals", {
-        id: source.id,
-        data: {
-          index: destinationIndex,
-          stage: destination.stage,
-        },
-        previousData: source,
-      }),
     ]);
   }
 };

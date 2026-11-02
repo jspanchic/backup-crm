@@ -1,19 +1,25 @@
 import { ResponsiveBar } from "@nivo/bar";
 import { format, startOfMonth } from "date-fns";
 import { TrendingUp } from "lucide-react";
-import { useGetList, useTranslate } from "ra-core";
+import { useGetList, useLocaleState, useTranslate } from "ra-core";
 import { memo, useMemo } from "react";
 
 import { findDealLabel } from "../deals/dealUtils";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Deal } from "../types";
+import { getDateFnsLocale } from "../misc/RelativeDate";
 
-const multiplier = {
-  opportunity: 0.2,
-  "proposal-sent": 0.5,
-  "in-negociation": 0.8,
-  delayed: 0.3,
-};
+/** Sum open opportunity amounts without assuming sales probabilities. */
+// Exported solely for unit tests; the application consumes this in DealsChart.
+// eslint-disable-next-line react-refresh/only-export-components
+export const getPendingAmount = (
+  deals: ReadonlyArray<Pick<Deal, "stage" | "amount">>,
+) =>
+  deals.reduce((sum, deal) => {
+    if (deal.stage === "won" || deal.stage === "lost") return sum;
+    const amount = Number.isFinite(deal.amount) ? deal.amount : 0;
+    return sum + amount;
+  }, 0);
 
 const threeMonthsAgo = new Date(
   new Date().setMonth(new Date().getMonth() - 6),
@@ -23,6 +29,7 @@ const DEFAULT_LOCALE = "en-US";
 
 export const DealsChart = memo(() => {
   const translate = useTranslate();
+  const [locale] = useLocaleState();
   const { dealStages, currency } = useConfigurationContext();
   const acceptedLanguages = navigator
     ? navigator.languages || [navigator.language]
@@ -53,20 +60,16 @@ export const DealsChart = memo(() => {
 
     const amountByMonth = Object.keys(dealsByMonth).map((month) => {
       return {
-        date: format(month, "MMM"),
+        date: format(month, "MMM", {
+          locale: getDateFnsLocale(locale ?? "es"),
+        }),
         won: dealsByMonth[month]
           .filter((deal: Deal) => deal.stage === "won")
           .reduce((acc: number, deal: Deal) => {
             acc += deal.amount;
             return acc;
           }, 0),
-        pending: dealsByMonth[month]
-          .filter((deal: Deal) => !["won", "lost"].includes(deal.stage))
-          .reduce((acc: number, deal: Deal) => {
-            // @ts-expect-error - multiplier type issue
-            acc += deal.amount * multiplier[deal.stage];
-            return acc;
-          }, 0),
+        pending: getPendingAmount(dealsByMonth[month]),
         lost: dealsByMonth[month]
           .filter((deal: Deal) => deal.stage === "lost")
           .reduce((acc: number, deal: Deal) => {
@@ -77,7 +80,7 @@ export const DealsChart = memo(() => {
     });
 
     return amountByMonth;
-  }, [data]);
+  }, [data, locale]);
 
   if (isPending) return null; // FIXME return skeleton instead
   const range = months.reduce(
