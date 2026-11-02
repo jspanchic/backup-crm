@@ -66,7 +66,7 @@ Estos son los **únicos** permisos de `crm_api`. Todo lo demás está denegado. 
 1. **La autorización real es de `core-api`, no de la base.** Las políticas RLS dicen `using (true)` para `authenticated` (`supabase/schemas/05_policies.sql`). Prueba: un token válido con un `sub` que **no existe** en `sales` lee todo y puede crear contactos (quedan con `sales_id` nulo). Por eso el JWT solo lo debe firmar `core-api`, solo para personas dadas de alta, y PostgREST nunca debe quedar expuesto fuera de la red interna.
 2. **Las funciones con EXECUTE quedan expuestas como `rpc/…`.** PostgREST publica `get_avatar_for_email`, `get_domain_favicon` y las `search_*` como endpoints porque el trigger las necesita con los derechos del llamador. `core-api` debe permitir solo `rpc/global_search` y dejar fuera el resto.
 3. **Los privilegios por defecto de Postgres no son seguros.** El esquema, tal como viene, da `grant all` a `anon` y `service_role` (`06_grants.sql`), y las funciones nacen con EXECUTE para `PUBLIC`. El spike los **revoca todos** antes de dar nada (`90_roles.sql`, paso 1). Hay que hacer lo mismo en el servidor.
-4. **El esquema y las migraciones no coinciden en un permiso.** `supabase/migrations/20261031210000_deal_followup_on_win.sql` da SELECT e INSERT en `deal_followup_events` a `authenticated`, pero `supabase/schemas/06_grants.sql` (la fuente de verdad) **no**. Con solo el esquema, ganar una oportunidad falla con `permission denied for table deal_followup_events`. Se reporta aquí; no se corrigió porque está fuera del alcance del spike.
+4. **Corrección del 02/11:** este punto decía que `06_grants.sql` no daba permisos a `authenticated` sobre `deal_followup_events`. **Era un error mío:** sí los da, igual que la migración. Lo que falló en el spike es que `90_roles.sql` le había revocado todo a `authenticated` y faltaba dárselo a `crm_api`.
 
 ### 4.2 `90_roles.sql` completo
 
@@ -116,7 +116,6 @@ grant execute on function
   public.global_search(text, text[], integer)
 to crm_api;
 -- 5. Won-deal follow-up: create_deal_followup_on_win() is not security definer and inserts into this table as crm_api.
--- Note: migration 20261031210000 grants select, insert to "authenticated"; supabase/schemas/06_grants.sql does not (drift, reported in ADR-001).
 grant select, insert on public.deal_followup_events to crm_api;
 ```
 
@@ -154,7 +153,6 @@ Las horas de la sección 5 que caen en `core-api` (alta de personas, merge) se c
 1. **PostgREST nunca sale de la red interna.** Solo `core-api` le habla, y `core-api` filtra qué `rpc` y qué recursos pasan (lista cerrada, en `ROUTES.md`).
 2. **El JWT lo firma solo `core-api`**, con vida corta, para personas existentes en `sales`. Es la única barrera real (sección 4.1, punto 1).
 3. **Joel aprueba la lista de permisos de la sección 4** y que el rol de la base no sea `postgres`. Si no la acepta, se pasa a B (≈ +14 a +20 h sobre lo estimado).
-4. Corregir el desajuste de `06_grants.sql` antes de usar el esquema en el servidor (sección 4.1, punto 4).
 
 **Riesgos que quedan:** (a) las políticas RLS son `using (true)`, así que toda la autorización de filas depende de `core-api`; (b) el spike no probó carga ni concurrencia; (c) no se probó el camino real a través de `core-api` (llega en CRM-T5): solo se probó el proveedor directo a PostgREST con un token local; (d) Adjuntos y avatar quedan fuera.
 

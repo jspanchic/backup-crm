@@ -88,6 +88,19 @@ begin
 
   new.brand_id := deal.brand_id;
   new.is_test := deal.is_test;
+  -- Amounts come from the quote, which the database calculated. Whatever the caller wrote is replaced,
+  -- so a document can never show a different figure from its quote.
+  new.payload := coalesce(new.payload, '{}'::jsonb) || jsonb_build_object(
+    'quote_version', quote.version,
+    'covered_sqft', quote.covered_sqft,
+    'uncovered_sqft', quote.uncovered_sqft,
+    'subtotal', quote.subtotal,
+    'discount', quote.discount,
+    'total', quote.total,
+    'min_applied', quote.min_applied,
+    'currency', quote.currency,
+    'price_confirmed', quote.price_confirmed
+  );
 
   update core.document_counters
   set last_number = last_number + 1

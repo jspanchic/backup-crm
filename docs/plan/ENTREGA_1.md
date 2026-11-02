@@ -1,7 +1,7 @@
 # Plan de la Entrega 1 (demo funcional en local)
 
 - **Fecha:** lunes 02/11/2026
-- **Estado:** APROBADO el 02/11/2026 con cinco ajustes (sección 13). CRM-T0b está hecho en `wip/monorepo` y sin publicar; lo demás no ha empezado.
+- **Estado:** APROBADO el 02/11/2026 con los ajustes de la sección 13. CRM-T0b y CRM-T4 están hechos en ramas `wip/`, sin publicar. Lo demás no ha empezado.
 - **Alcance:** todo en local, sin VPS, sin WAHA real y sin Joel. Decisión tomada: opción C ([ADR-001](../decisiones/ADR-001-proveedor-datos.md)) y destino en el monorepo de `origin/f1-b0-repo-base`.
 - **Convención:** nombres de tablas, columnas, código y commits en inglés. Este documento y `docs/` en español.
 - **Citas:** `[ARQ]`, `[BASE]`, `[SM]` y `[GRAB]` son las claves definidas al inicio de la auditoría. Lo no verificado se marca **SUPUESTO**.
@@ -10,7 +10,7 @@
 
 1. **El monorepo es un esqueleto.** `core-api/`, `db/`, `infra/` y `n8n/` solo tienen un README. Lo real es `backoffice/` (Atomic v1.6.0 del 22/09), el CI y el hook de gitleaks.
 2. **Los `.env` de `backoffice/` son las plantillas del upstream:** idénticos byte a byte (sección 2.2).
-3. **Estimación: 44,5 h base, ≈53 h con 20% de margen** (con el Javier real de la demo, ajuste 2). Son más que las 28,5 h de la auditoría (sección 5). A 30 h por semana, no caben en la semana del 08/11. La sección 5.2 dice qué recortar y cuándo decidirlo.
+3. **Estimación: 47 h base, ≈56 h con 20% de margen** (con el Javier real de la demo y las pruebas de "sin equivocarse"). Son más que las 28,5 h de la auditoría (sección 5). A 30 h por semana, no caben en la semana del 08/11. La sección 5.2 dice qué recortar y cuándo decidirlo.
 4. **Hay un problema causado por mi push anterior:** `origin/crm-t0-rescate` contiene toda la historia del upstream, y el CI escanea todas las ramas con gitleaks (sección 2.3).
 5. **Las 8 decisiones de la sección 11 están aprobadas**, con los ajustes de la sección 13.
 
@@ -55,7 +55,7 @@ Comparé el identificador del blob de git, que cambia si cambia un solo byte.
 - `crm-t0-rescate` trae toda la historia pública de marmelab. Las fixtures del upstream aparecen ahí en otros commits, y las huellas de `.gitleaksignore` solo valen para `9e638504`.
 - **Verificado el 02/11 con gitleaks 8.30.1 local** (mismas opciones que el CI): escanear las ramas de `origin` da **13 hallazgos**, todos en la historia que trae `crm-t0-rescate`. `wip/monorepo` (15 commits) da 0. Cuando `ci.yml` llegue a esa rama, el job `secrets` se pondría en rojo. Mi push no lo disparó, porque esa rama trae los workflows del upstream y no este `ci.yml`.
 - **No son secretos nuevos.** Es ruido de fixtures públicas, pero rompería el CI.
-- **Propuesta:** borrar `origin/crm-t0-rescate` cuando se publique CRM-T0b. El trabajo queda en el monorepo y en la rama local. Es una acción remota: la hago solo con tu orden (decisión 6).
+- **Decisión de Sebastián:** al publicar CRM-T0b se borra `origin/crm-t0-rescate` en el mismo paso. El trabajo queda en el monorepo y en la rama local.
 
 ## 3. CRM-T0b · Integración al monorepo (3 h)
 
@@ -165,16 +165,16 @@ Cada tarea se trabaja en `wip/crm-tN` y solo sube con "publica <ID>".
 | Orden | Tarea | Qué incluye | Horas |
 |---:|---|---|---:|
 | 1 | **CRM-T0b** | Sección 3 | 3 |
-| 2 | **CRM-T4** | Compose local, roles, capa de compatibilidad, línea base de Atomic, tablas `core`, precios, agenda, runner de migraciones, pruebas de esquema | 9 |
+| 2 | **CRM-T4** | Compose local, roles, capa de compatibilidad, línea base de Atomic, tablas `core`, precios, agenda, documentos, runner de migraciones, pruebas de esquema | 10 |
 | 3 | **CRM-T5** | Fastify, webhook, firma, duplicados, E.164, redacción de tarjetas, resolución de marca a titular, contexto, token, llamada al bot, outbox, proxy `/admin/rest` | 8 |
-| 4 | **CRM-T6** | Las 9 tools (decisión 8) con esquema estricto | 7 |
+| 4 | **CRM-T6** | Las 9 tools (decisión 8) con esquema estricto, y la revisión de `responder` (sección 9.2) | 8 |
 | 5 | **CRM-T9 (local)** | Disponibilidad, horarios libres, hold con vencimiento, manejo del cruce, vista de citas | 4 |
 | 6 | **CRM-T10** | Número reasignado, "Prueba X", casos de teléfono | 2 |
 | 7 | **CRM-T8 (panel)** | Carpeta definitiva, selección por configuración, autenticación local, lista de citas de solo lectura | 3 |
-| 8 | **CRM-T7 (parte local)** | n8n en Docker, copia del workflow TEST sin memoria que llama a `core-api` (sección 7.7) | 5,5 |
+| 8 | **CRM-T7 (parte local)** | n8n en Docker, copia del workflow TEST sin memoria que llama a `core-api`, y prueba adversaria con Claude (sección 7.7) | 6 |
 | 9 | **CRM-T11 (parte)** | Simulador, mock del bot (para las pruebas automáticas), contrato HTTP, guion de demo, job de CI | 3 |
-| | **Total base** | | **44,5** |
-| | **Con 20% de margen** | | **≈53** |
+| | **Total base** | | **47** |
+| | **Con 20% de margen** | | **≈56** |
 
 CRM-T1 ya se hizo. Las pruebas van dentro de cada tarea, no al final. Dependencias: T0b → T4 → T5 → T6 → (T9, T10) → T8 → T7 (local) → T11. El mock del bot se queda para las pruebas automáticas: son deterministas, y Claude no lo es.
 
@@ -188,13 +188,14 @@ CRM-T1 ya se hizo. Las pruebas van dentro de cada tarea, no al final. Dependenci
 | Más pruebas de aceptación y simulador | +3 |
 | Salen n8n real, VPS y sesión de WAHA (pasan a después) | ≈ −4 |
 | Línea base más fina de T4, T5, T6, T9 y T10 | ≈ +2,5 |
-| Javier real en local (CRM-T7, parte local), ajuste 2 | +5,5 |
+| Javier real en local (CRM-T7, parte local), ajuste 2 | +6 |
+| Documentos en el esquema (+1) y revisión de `responder` (+1) | +2 |
 
 Estos desgloses son mi estimación, no una medición.
 
 ### 5.2 ¿Cabe en el plazo?
 
-- **Con las horas base, no.** A 30 h por semana y 5 h por día (domingo libre), 44,5 h dan ≈9 días de trabajo: **≈12–13/11**, no el 08/11.
+- **Con las horas base, no.** A 30 h por semana y 5 h por día (domingo libre), 47 h dan ≈9,5 días de trabajo: **≈13/11**, no el 08/11.
 - **CRM-T0 y T1 tomaron bastante menos reloj que lo estimado** (ya tienes esas cifras en el chat). Puede repetirse, pero no lo doy por hecho: T4 a T6 tienen más diseño y más revisión tuya.
 - **Punto de control:** al terminar CRM-T4 y T5 comparo horas reales con estimadas y te digo la fecha nueva.
 
@@ -205,7 +206,7 @@ Estos desgloses son mi estimación, no una medición.
 | Panel directo a PostgREST en local, sin proxy (el proxy pasa a la Entrega 2) | 1 h | La demo no muestra la "única puerta". **Producción sigue exigiéndolo** |
 | Citas por SQL en la demo, sin lista en el panel | 1 h | Incumple el punto 8. Solo con tu OK |
 | Outbox sin ritmo ni reintentos | 0,5 h | Se agrega antes de usar WAHA real |
-| Javier real (CRM-T7 local): la demo usa solo el mock del bot | 5,5 h | La demo sigue un guion, no es Javier con Claude. Es el recorte más grande: solo con tu OK |
+| Javier real (CRM-T7 local): la demo usa solo el mock del bot | 6 h | La demo sigue un guion, no es Javier con Claude. Es el recorte más grande: solo con tu OK |
 
 **No recorto:** firma, exclusión, vencimiento de token, permisos, ni las pruebas de la sección 8.
 
@@ -236,8 +237,9 @@ Todo sale de `db/migrations/`. Las reglas viven en la base, no solo en la app.
 | `0004_atomic_additions.sql` | Columnas nuevas en `contacts` y `deals` |
 | `0005_pricing.sql` | Precios y cotizaciones |
 | `0006_scheduling.sql` | Técnicos, disponibilidad, citas |
-| `0007_api_functions.sql` | Funciones del esquema `api` |
-| `0008_permissions.sql` | Revocaciones y permisos |
+| `0007_documents.sql` | Cotización, orden de compra y orden de trabajo: numeración e inmutabilidad |
+| `0008_api_functions.sql` | Primeras funciones del esquema `api`; las de negocio llegan en migraciones de CRM-T5, T6, T9 y T10 |
+| `0009_permissions.sql` | Revocaciones y permisos |
 
 **La compatibilidad se conserva** (`auth.users`, `auth.uid()` y `net.http_post`, como en el spike). Es más barato y con menos conflictos que reescribir funciones de Atomic. Esto reemplaza el "desconectar `auth.users`" del ADR-001.
 
@@ -357,7 +359,6 @@ Un trigger impide cambiar los valores: un precio nuevo es una versión nueva. So
 | Columna | Tipo | Restricciones |
 |---|---|---|
 | `id` | `bigint` | PK |
-| `number` | `bigint` | `unique`, de una secuencia |
 | `deal_id` | `bigint` | FK, `not null` |
 | `version` | `integer` | `unique (deal_id, version)` |
 | `price_list_id` | `bigint` | FK, `not null` |
@@ -467,14 +468,17 @@ Va **sin** `security_invoker` a propósito: así `crm_api` lee la vista sin tene
 
 `0004` reemplaza `public.get_avatar_for_email` por una versión que devuelve `null`. Se evitan el `"ERROR"` y que la base llame a un servicio externo con el hash del correo de un cliente. No se edita `backoffice/supabase/`.
 
-### 6.6 Arreglo del grant de `deal_followup_events`
+### 6.6 El grant de `deal_followup_events` (corrección)
 
-| Dónde | Cambio |
+**Mi hallazgo del ADR-001 estaba mal: no hay desajuste.** `backoffice/supabase/schemas/06_grants.sql` sí da `select, insert` a `authenticated`, igual que la migración `20261031210000` (línea 100). Mi búsqueda de entonces no incluía la palabra `authenticated`, y no lo vi. El ADR quedó corregido y **no hace falta tocar `backoffice/`**.
+
+Lo que falló en el spike fue otra cosa: `90_roles.sql` le revocó todo a `authenticated` y faltaba darle el permiso a `crm_api`.
+
+| Dónde | Qué queda |
 |---|---|
-| `backoffice/supabase/schemas/06_grants.sql` | Agregar `grant select, insert on table public.deal_followup_events to authenticated;`, igual que la migración `20261031210000`. Es una línea nuestra, sin conflicto con upstream. Corrige el desajuste para quien use Supabase local |
-| `db/migrations/0008_permissions.sql` | `grant select, insert on public.deal_followup_events to crm_api;` |
-| `core-api/.../allowlist` | La tabla **no** pasa por el proxy: la usa solo el trigger |
-| Prueba | Pasar una oportunidad a `won` desde el panel crea el evento y la tarea |
+| `db/migrations/0009_permissions.sql` | `grant select, insert on public.deal_followup_events to crm_api;` |
+| Proxy de `core-api` | La tabla **no** pasa: la usa solo el trigger |
+| Prueba | Ganar una oportunidad desde PostgREST crea el evento y la tarea (pasa) |
 
 ### 6.7 Roles y permisos
 
@@ -492,7 +496,7 @@ Sigue `[BASE]`:124-133 y agrega los roles de PostgREST del ADR-001.
 
 `core_backoffice` y `core_backup` de `[BASE]` se crean cuando haga falta: `crm_api` cubre el panel, y los respaldos son CRM-T12.
 
-**`0008_permissions.sql`:**
+**`0009_permissions.sql`:**
 
 ```sql
 -- 1. Default-deny
@@ -675,17 +679,17 @@ Todas: Bearer obligatorio, esquema `zod` **estricto** (un `contact_id` en el cue
 
 | Pieza | Decisión |
 |---|---|
-| Imagen | `n8nio/n8n:2.46.2` (publicada el 29/10/2026, más de 1 día). **SUPUESTO:** no conozco la versión del n8n de producción; hay que confirmarla con Joel para que el JSON exportado sea compatible |
+| Imagen | `n8nio/n8n:2.43.5`, la que corre en producción (bitácora del 01/11, confirmado por Sebastián). Publicada el 14/10/2026 |
 | Red | Solo `127.0.0.1:5678`. Volumen propio. `N8N_ENCRYPTION_KEY` generada en local y **fuera del repo**. Telemetría y diagnóstico apagados |
 | Licencia | Sustainable Use: uso interno y de desarrollo. **No se empaqueta** dentro del producto (auditoría, sección 2) |
 | Workflow | `n8n/workflows/javier-core-api-local.json`, **exportado sin credenciales, sin datos fijados y sin números** |
 | Qué se conserva de TEST | El nodo AI Agent con su mensaje de sistema, y el modelo `claude-sonnet-5-5` que ya usa TEST |
 | Qué sale | Router, menú de marcas y códigos, puerta trasera, modo enseñanza, nodos de WAHA, notas de voz, nodo de memoria de Postgres, y los **datos fijados** (`pinData`), que pueden traer conversaciones reales |
 | Qué entra | Webhook de entrada con verificación de `X-Core-Signature` y `X-Core-Timestamp`; armado del mensaje con el historial del cuerpo; **9 nodos HTTP Request Tool** hacia `/tools/*`, con `Authorization: Bearer` tomado del webhook y **nunca del modelo** |
-| Prompt | Se reescriben 3 zonas del mensaje de sistema de TEST: (1) el cálculo con precios fijos pasa a llamar a `cotizar`; (2) "acepta cualquier hora" pasa a "ofrece solo `horarios_libres` y reserva con `reservar`" (`[SM]`:322); (3) se agregan `escalar` y `confirmar_titular`. **El texto comercial y las afirmaciones del producto no se tocan** sin OK de JM |
+| Prompt | Se reescriben 3 zonas del mensaje de sistema de TEST: (1) el cálculo y **todos los precios y ejemplos con montos** (`[SM]`:136-231) salen y pasan a llamar a `cotizar`; (2) "acepta cualquier hora" pasa a "ofrece solo `horarios_libres` y reserva con `reservar`" (`[SM]`:322); (3) se agregan `escalar` y `confirmar_titular`. **El texto comercial y las afirmaciones del producto no se tocan** sin OK de JM |
 | Respuesta | El agente termina llamando a `responder`; el flujo no escribe a WAHA |
 
-**Horas: 5,5 (base).**
+**Horas: 6 (base).**
 
 | Tarea | Horas |
 |---|---:|
@@ -693,14 +697,15 @@ Todas: Bearer obligatorio, esquema `zod` **estricto** (un `contact_id` en el cue
 | Copia saneada del workflow, nodos de entrada y 9 herramientas | 2,5 |
 | Reescritura de las 3 zonas del prompt | 1 |
 | Pruebas de punta a punta con Claude y ajustes | 1 |
+| Prueba adversaria (9.2, C1.5 y C2.5) | 0,5 |
 | Runbook y exportación sin credenciales | 0,5 |
 
 **Qué necesito para la credencial de Anthropic.** No la busco en ningún archivo ni la leo:
 
-1. **Tú creas una llave nueva solo para esta demo**, con un nombre como `salvionix-local-dev` y un **límite de gasto mensual bajo** (propongo 10 USD) en el panel de Anthropic. Si se filtra o el flujo entra en bucle, el daño tiene tope. No reutilices la de producción.
+1. **Tú consigues una llave nueva solo para esta demo**, con un nombre como `salvionix-local-dev` y un **límite de gasto mensual bajo** (propongo 10 USD) en el panel de Anthropic. Si se filtra o el flujo entra en bucle, el daño tiene tope. No reutilices la de producción.
 2. **Tú la escribes en n8n.** Cuando el contenedor esté arriba, abres `http://127.0.0.1:5678`, creas el usuario propietario y, en *Credentials → Create → Anthropic*, pegas la llave. Yo te digo el nombre exacto de la credencial, que es lo único que usa el flujo.
 3. n8n la cifra con `N8N_ENCRYPTION_KEY` dentro de su volumen, que `.gitignore` y gitleaks no dejan subir. La llave nunca pasa por un archivo del repo ni por el chat.
-4. Confírmame el modelo para la demo: propongo `claude-sonnet-5-5`, el mismo de TEST.
+4. Modelo de la demo: `claude-sonnet-5-5`, el mismo de TEST (confirmado).
 5. **Costo de la demo, SUPUESTO (no medido):** el mensaje de sistema pesa unos 23.000 caracteres y cada vuelta con herramientas lo repite. Estimo 8 a 15 llamadas por recorrido completo, unos 0,2 a 0,5 USD. Lo mido en la primera corrida y te lo digo.
 
 **Riesgos:** (a) Claude no es determinista: la demo puede variar, y por eso las pruebas automáticas usan el mock. (b) Si Claude llama a una herramienta con un campo de más, `core-api` responde 400 y el modelo reintenta: hay que ver cuánto gasta. (c) Hoy el Router decide el idioma del saludo según el país del celular; sin Router, el idioma del cliente viaja en `contacto.idioma`.
@@ -748,7 +753,7 @@ Todas: Bearer obligatorio, esquema `zod` **estricto** (un `contact_id` en el cue
 
 ### 8.5 Imágenes de Docker (no son npm)
 
-`postgres:17.10` y `postgrest/postgrest:v16.4`, las del spike, y `n8nio/n8n:2.46.2` (7.7), todas solo en `127.0.0.1`.
+`postgres:17.10` y `postgrest/postgrest:v16.4`, las del spike, y `n8nio/n8n:2.43.5` (7.7), todas solo en `127.0.0.1`.
 
 ## 9. Criterios de aceptación
 
@@ -780,7 +785,34 @@ Pruebas automáticas en `core-api/test/` con Vitest y **Postgres real**, sin sim
 | A17 | **Duplicado** | Mismo `payload.id` dos veces: un mensaje y una llamada al bot, ambos 200 |
 | A18 | **Token vencido** | `exp` pasado: 401 en todas las tools. También token mal firmado y con `aud` equivocado |
 
-### 9.2 Los que hacen falta para confiar en la demo
+### 9.2 "Sin equivocarse" (pedido de JM, 02/11)
+
+**Objetivo 1 de JM: el agente con el CRM agendando sin equivocarse.** Se traduce en dos reglas verificables. Lo que el modelo escriba no se da por bueno: se compara con la base.
+
+**C1. El bot nunca confirma un horario que la base no reservó.**
+
+| # | Prueba | Se comprueba | Dónde |
+|---|---|---|---|
+| C1.1 | La base no acepta una confirmación sin hold | Insertar una cita como `confirmed` se rechaza; un hold vencido, cancelado o expirado no se puede confirmar | **Pasa** (CRM-T4) |
+| C1.2 | `confirmar` sin hold vigente | `409`, ninguna cita cambia, nada entra en `outbox` | CRM-T6 |
+| C1.3 | El mensaje de confirmación lo escribe `core-api` | Al confirmar, `core-api` encola el mensaje con fecha, hora y dirección **leídas de la cita**, no del modelo | CRM-T6 |
+| C1.4 | `responder` revisa lo que dice el modelo | Un texto que afirma una cita ("agendado", "confirmado", "scheduled") sin cita confirmada, o con otra fecha u hora que la de la base: `422`, **no entra en `outbox`** y queda registrado | CRM-T6 |
+| C1.5 | Prueba adversaria con Claude real | "Confírmame el sábado a las 3" sin disponibilidad, doble reserva y hold vencido. Se comprueba que **todo lo que salió** por `outbox` con una fecha coincide con `core.appointments`. Claude puede variar: el criterio es sobre lo que salió, no sobre sus palabras | CRM-T7 |
+
+**C2. Todos los montos los calcula `core-api`, no el modelo.**
+
+| # | Prueba | Se comprueba | Dónde |
+|---|---|---|---|
+| C2.1 | La base recalcula siempre | Insertar una cotización con otro total se ignora; se usa el de la lista de precios. El total no se puede editar | **Pasa** (CRM-T4) |
+| C2.2 | Los documentos no pueden mostrar otra cifra | El monto del documento sale de su cotización, aunque el que emite escriba otro | **Pasa** (CRM-T4) |
+| C2.3 | `cotizar` no acepta montos | Un campo `total` o `precio` en la llamada: `400` por el esquema estricto | CRM-T6 |
+| C2.4 | `responder` revisa los montos | Un texto con un monto (`$100`, `100 dólares`, `USD 100`) que no es de la cotización vigente: `422`, **no entra en `outbox`**. Con el total correcto sí sale | CRM-T6 |
+| C2.5 | Prueba adversaria con Claude real | "¿Cuánto cuesta sin cotizar?", "hazme 20% de descuento". Todo monto en `outbox` existe en `core.quotes` | CRM-T7 |
+| C2.6 | Sin precios fuera de la base | Búsqueda en el código de `core-api` y en el prompt de la copia del workflow: sin tarifas ni mínimos | CRM-T6 y T7 |
+
+**Límite honesto de C1.4 y C2.4:** la revisión busca patrones en el texto. Puede dejar pasar una forma rara de decirlo ("doscientos ocho") y puede frenar una frase legítima. Si frena, el modelo recibe el motivo y reintenta. La protección de fondo son C1.1 a C1.3 y C2.1 a C2.3, que no dependen de lo que escriba. Por eso **el mensaje con la cita y el de la cotización los compone `core-api`**.
+
+### 9.3 Los que hacen falta para confiar en la demo
 
 | # | Prueba | Se comprueba |
 |---|---|---|
@@ -812,11 +844,11 @@ Pruebas automáticas en `core-api/test/` con Vitest y **Postgres real**, sin sim
 | Empresa: 1000 cubiertos | 1000 | 0 | 120,00 | 111,60 | **150** | Sí |
 | 3 autos descubiertos | 1000 | 640 | 158,40 | 147,312 | **150** | Sí |
 
-### 9.3 Panel
+### 9.4 Panel
 
 No hay Chromium instalado en `C:\CRM`. Si lo apruebas (decisión 4), corren los tests `app`. La verificación de la demo se hace en el navegador integrado con el guion: contactos, oportunidades, y citas de solo lectura sin botones de escritura.
 
-### 9.4 Guion de demo (`core-api/dev/demo.ts`)
+### 9.5 Guion de demo (`core-api/dev/demo.ts`)
 
 Con la pila arriba, ejecuta estos escenarios y deja los datos para mirarlos en el panel: cliente nuevo → datos → cotización → horarios → reserva → confirmación; cruce rechazado; hold vencido; firma inválida; duplicado; reasignado; Prueba X; escalar.
 
@@ -856,7 +888,7 @@ Con la pila arriba, ejecuta estos escenarios y deja los datos para mirarlos en e
 
 ## 12. Fuera de la Entrega 1
 
-n8n del VPS, Cloudflare, sesión real de WAHA, SMS, notas de voz, formulario, descuento por zona y cobertura de ZIP, PDFs, importar historial, pausa/reanudar desde el panel, edición de citas, gestión de usuarios, adjuntos, STOP y consentimientos, uso de LLM y auditoría.
+n8n del VPS, Cloudflare, sesión real de WAHA, SMS, notas de voz, formulario, descuento por zona y cobertura de ZIP, PDFs (CRM-T14, Entrega 2), importar historial, pausa/reanudar desde el panel, edición de citas, gestión de usuarios, adjuntos, STOP y consentimientos, uso de LLM y auditoría.
 
 **Antes de campañas reales,** STOP y consentimientos son obligatorios (`[BASE]`:67).
 
@@ -869,3 +901,94 @@ n8n del VPS, Cloudflare, sesión real de WAHA, SMS, notas de voz, formulario, de
 | 3 | Dedupe: usar el formato de `payload.id` de la documentación oficial de WAHA, marcado SUPUESTO hasta una captura real | 7.2 |
 | 4 | Modelos: CRM-T0b con Sonnet, CRM-T4 con Opus, después Sonnet | Forma de trabajo |
 | 5 | Empezar por CRM-T0b en `wip/`. Nada se publica sin "publica <ID>" | 3.5 |
+| 6 | Ramas de entrega: cada una se arma sobre la anterior (`crm-t4-…` sobre `crm-t0b-monorepo`), para que los squash no choquen. Publicar CRM-T0b borra `origin/crm-t0-rescate` en el mismo paso | 2.3 y sección 16 |
+| 7 | n8n local en 2.43.5, la de producción. La llave de Anthropic la consigue Sebastián. Modelo `claude-sonnet-5-5` | 7.7 |
+| 8 | Pedido de JM: CRM-T14 (PDFs) en la Entrega 2, y esquema listo en CRM-T4 | 14 y 15 |
+| 9 | "Sin equivocarse": el bot nunca confirma un horario que la base no reservó, y los montos los calcula `core-api` | 9.2 |
+
+## 14. CRM-T14 · PDFs (Entrega 2)
+
+Objetivo 2 de JM: cotizaciones, órdenes de compra y órdenes de trabajo en PDF. **El esquema ya está listo** (sección 15); no se construyó ningún PDF.
+
+### 14.1 Motor
+
+| Opción | Licencia | A favor | En contra |
+|---|---|---|---|
+| **Gotenberg 8** (recomendada) | MIT (verificado en su `LICENSE`) | Ya es la decisión de `[BASE]`:173. Plantillas HTML fáciles de editar. Sin salida a internet no hay SSRF desde el HTML | Un contenedor más con Chromium: consume RAM, y la RAM del VPS sigue sin conocerse |
+| `pdfkit` | MIT (verificado en npm, 0.20.2) | Dentro de `core-api`, sin contenedor, muy liviano | Las plantillas son código: cada cambio de JM pasa por un desarrollador |
+| `pdf-lib` | MIT (verificado en npm) | Sin dependencias pesadas | Sin publicar desde 2022. No |
+| Puppeteer | Apache-2.0 (**SUPUESTO**, no lo verifiqué) | HTML | Mismo Chromium, sin el aislamiento de Gotenberg |
+
+**Versión propuesta:** `gotenberg/gotenberg:8.38.1` (15/10/2026), fijada, en la red interna, sin salida a internet, con límite de memoria.
+
+**Punto de licencia a revisar antes de vender:** la imagen de Gotenberg incluye herramientas de terceros, entre ellas **PDFtk Java** (su `Dockerfile` la instala). Hasta donde sé es GPL. Corre como un proceso aparte, sin modificar y sin enlazarse a nuestro código, así que para usarla internamente no veo problema. **Si el producto se entrega empaquetado a clientes, hay que revisarlo con un abogado.** No es una opinión legal. El respaldo es `pdfkit`, sin ese tema.
+
+### 14.2 Decisiones
+
+| Tema | Propuesta |
+|---|---|
+| **Plantillas** | HTML con datos de `core.documents.payload`, en `core-api/templates/`, una por tipo y con versión. Sin plantillas editables desde el panel en esta entrega |
+| **Numeración** | Ya resuelta en CRM-T4: `COT-`, `OC-`, `OT-`, sin huecos, con serie aparte para pruebas. **Falta de JM:** el número inicial. El prompt usa "501" como ejemplo |
+| **Datos congelados** | El PDF se genera solo desde `payload`, nunca de datos vivos. Regenerarlo da el mismo contenido |
+| **Dónde se guardan** | Volumen privado del VPS, fuera de la web, con el nombre `<id>.pdf`. Tabla nueva `core.document_files` con la ruta, el hash SHA-256 y el tamaño, solo de inserción. Entran en los respaldos cifrados (CRM-T12). Cloudflare R2 queda para después |
+| **Enlace** | `GET /d/{token}` (`[ARQ]`:215): token aleatorio de 128 bits, **guardado como hash** (`[BASE]`:122), con vencimiento y registro de aperturas. Es ruta pública: depende de CRM-T3 |
+| **Envío por WhatsApp** | `POST /api/sendFile` de WAHA con `file.data` (base64), por `outbox`, con el ritmo de siempre. La documentación dice que desde la versión 2026.6.1 lo que era Plus está en Core, incluidos los mensajes multimedia. **Falta confirmar con Joel la versión de producción y probarlo en el número de BYTOGAM.** Respaldo: mandar el enlace por texto |
+| **Quién dispara** | Cotización al `cotizar`. Orden de compra al reservar, para que el cliente la confirme (`[SM]`:347-355). Orden de trabajo al `confirmar`, para el técnico |
+| **Panel** | Lista de documentos de la oportunidad y descarga |
+
+### 14.3 Estimación
+
+| Tarea | Horas |
+|---|---:|
+| Gotenberg en Compose, red interna y límites | 0,5 |
+| Tres plantillas con marca, en español e inglés | 3 |
+| Emisión desde las tools (cotizar, reservar, confirmar) con su `payload` | 1 |
+| Generación del PDF, guardado y hash | 2 |
+| Envío por `outbox` con `sendFile` y respaldo por enlace | 1,5 |
+| Enlace `GET /d/{token}` con vencimiento y aperturas | 1,5 |
+| Panel: lista y descarga | 1,5 |
+| Pruebas | 2 |
+| **Total base** | **12,5** |
+| **Con 20% de margen** | **≈15** |
+
+**Lo que necesito de JM antes de empezar:** contenido y datos legales de la orden de compra y la de trabajo (`[ARQ]`:352), número inicial y vigencia de la cotización. **De Joel:** RAM del VPS y versión de WAHA.
+
+**Riesgo:** los textos de esos documentos son compromisos legales. Sin el OK de JM no se emite ningún PDF a un cliente real.
+
+## 15. Resultado de CRM-T4 (02/11/2026, `wip/crm-t4`, sin publicar)
+
+| Pieza | Estado |
+|---|---|
+| Pila local | `infra/local/docker-compose.yml`: Postgres 17.10 y dos PostgREST v16.4 (desarrollo y pruebas), solo en `127.0.0.1`. Claves aleatorias en `infra/local/.env`, ignorado por git |
+| Migraciones | 9 archivos en `db/migrations/`, aplicados por `core_owner` sin superusuario. Runner con checksum |
+| Atomic | Línea base generada desde `backoffice/supabase/schemas`, y prueba que falla si cambian o si llega una migración nueva |
+| Pruebas | **138 pasan**, contra Postgres y PostgREST reales, con base nueva en cada corrida |
+| Mutaciones | Quité 14 reglas una por una (exclusión, margen, inmutabilidad, permisos, dedupe...). **Las pruebas detectaron las 14** |
+
+**Cambios respecto a lo planeado, todos más estrictos:**
+
+| Cambio | Por qué |
+|---|---|
+| **`is_test`, el margen y el vencimiento del hold los pone la base**, no quien inserta | Si no, una reserva real podía marcarse "prueba" para saltarse la exclusión |
+| **Una cita nace como `hold`**, y los cambios de estado están limitados por trigger | "Sin equivocarse": no se puede confirmar algo que no se reservó, aunque la app falle |
+| **Los totales los recalcula un trigger** en `core.quotes` | Nadie puede escribir un total, ni `core-api` por error |
+| **La numeración va en `core.documents`**, y `core.quotes` ya no tiene número | Un solo sistema para los tres documentos |
+| **Contador, no secuencia**, con serie aparte para pruebas | Una secuencia deja huecos al revertir; "Prueba" tampoco debe consumir números reales |
+| **Una cita no se puede mover ni borrar** | Se cancela y se reserva otra. Editar citas desde el panel es Entrega 2 |
+| `get_avatar_for_email` devuelve `null` y quité la extensión `pgcrypto` y el stub de `http` | Ya no hacen falta |
+
+**Los montos de los documentos:** el trigger reemplaza los montos del `payload` con los de la cotización. El resto del `payload` (cliente, dirección) lo arma la función que emite, en CRM-T6.
+
+**No está en CRM-T4:** las funciones de negocio. `reservar`, con el vencimiento en la misma transacción, va en CRM-T9, y sus pruebas A5, A5b y A5c con ella. Hoy se prueba lo que depende de la base: un hold vencido sin marcar bloquea, y marcado deja de bloquear.
+
+## 16. Cómo se publica
+
+Con la orden "publica <ID>":
+
+| ID | Rama de entrega | Se arma sobre | Además |
+|---|---|---|---|
+| CRM-T0b | `crm-t0b-monorepo` | `origin/f1-b0-repo-base` | **Borrar `origin/crm-t0-rescate` en el mismo paso** |
+| CRM-T4 | `crm-t4-esquema` | `crm-t0b-monorepo` | |
+| CRM-T5 en adelante | `crm-tN-…` | La rama de entrega anterior | |
+
+Cada una es un commit nuevo con `git merge --squash` desde su rama `wip/`, y un push solo de esa rama. **Las ramas `wip/` nunca se suben.**

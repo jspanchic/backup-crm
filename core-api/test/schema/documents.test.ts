@@ -105,6 +105,25 @@ describe("documents", () => {
     });
   });
 
+  describe("amounts", () => {
+    it("takes every amount from the quote, replacing what the caller wrote", async () => {
+      const lead = await quotedLead();
+      const { rows } = await db.query(
+        `insert into core.documents (document_type, deal_id, quote_id, payload)
+         values ('quote', $1, $2, $3) returning payload`,
+        [lead.dealId, lead.quoteId, JSON.stringify({ total: 1, subtotal: 1, discount: 999, currency: "EUR", customer: "Ana" })],
+      );
+      expect(rows[0].payload).toMatchObject({
+        total: 208,
+        subtotal: 223.2,
+        discount: 15.62,
+        currency: "USD",
+        price_confirmed: false,
+        customer: "Ana",
+      });
+    });
+  });
+
   describe("immutability", () => {
     it("cannot be edited or deleted", async () => {
       const lead = await quotedLead();
