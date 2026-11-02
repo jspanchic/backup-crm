@@ -41,18 +41,17 @@ export const MobileNavigation = () => {
   return (
     <nav
       aria-label={translate("crm.navigation.label")}
-      className="fixed bottom-0 left-0 right-0 z-50 bg-secondary h-14"
+      className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#1c3349] bg-[#07131f] text-[#d3e4e2] shadow-[0_-10px_30px_rgba(2,12,20,0.15)]"
       style={{
         // iOS bug: even though viewport is set correctly, the bottom safe area inset is not accounted for
         // So we manually add some padding to avoid the navigation being too close to the home bar
         paddingBottom: isPwa && isWebiOS ? 15 : undefined,
         // We use box-sizing: border-box, so the height contains the padding.
         // To actually increase the padding, we need to increase the height as well
-        height:
-          "calc(var(--spacing)) * 6" + (isPwa && isWebiOS ? " + 15px" : ""),
+        height: isPwa && isWebiOS ? "calc(4rem + 15px)" : "4rem",
       }}
     >
-      <div className="flex justify-center">
+      <div className="flex h-16 items-center justify-around px-2">
         <>
           <NavigationButton
             href="/"
@@ -95,10 +94,11 @@ const NavigationButton = ({
 }) => (
   <Link
     to={href}
+    aria-current={isActive ? "page" : undefined}
     className={cn(
       buttonVariants({ variant: "ghost" }),
-      "flex-col gap-1 h-auto py-2 px-1 rounded-md w-16",
-      isActive ? null : "text-muted-foreground",
+      "flex-col gap-1 h-auto py-2 px-1 rounded-lg w-16 hover:bg-[#11263b] hover:text-[#f2fbf8]",
+      isActive ? "text-[#65e5c2]" : "text-[#a9bdc0]",
     )}
   >
     <Icon className="size-6" />
@@ -135,12 +135,12 @@ const CreateButton = () => {
             <Button
               variant="default"
               size="icon"
-              className="h-16 w-16 rounded-full -mt-3"
+              className="h-14 w-14 rounded-2xl -mt-5 border border-[#65e5c2]/40 bg-[#2fc9a0] text-[#03160f] shadow-[0_8px_24px_rgba(47,201,160,0.25)] hover:bg-[#65e5c2]"
               aria-label={translate("ra.action.create")}
             />
           }
         >
-          <Plus className="size-10" />
+          <Plus className="size-7" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="center">
           <DropdownMenuItem
