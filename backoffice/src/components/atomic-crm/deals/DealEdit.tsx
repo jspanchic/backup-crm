@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import {
   EditBase,
   Form,
@@ -22,6 +23,7 @@ import { DealInputs } from "./DealInputs";
 export const DealEdit = ({ open, id }: { open: boolean; id?: string }) => {
   const redirect = useRedirect();
   const notify = useNotify();
+  const queryClient = useQueryClient();
 
   const handleClose = () => {
     redirect("/deals", undefined, undefined, undefined, {
@@ -37,7 +39,13 @@ export const DealEdit = ({ open, id }: { open: boolean; id?: string }) => {
             id={id}
             mutationMode="pessimistic"
             mutationOptions={{
-              onSuccess: () => {
+              onSuccess: async () => {
+                await Promise.all([
+                  queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+                  queryClient.invalidateQueries({
+                    queryKey: ["contacts_summary"],
+                  }),
+                ]);
                 notify("resources.deals.updated", {});
                 redirect(`/deals/${id}/show`, undefined, undefined, undefined, {
                   _scrollToTop: false,

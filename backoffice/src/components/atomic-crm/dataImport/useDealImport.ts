@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { useDataProvider, useGetIdentity, type DataProvider } from "ra-core";
 
 import { useConfigurationContext } from "../root/ConfigurationContext";
+import { serviceSpaceTypes } from "../deals/serviceSpaceTypes";
 import { useCompanyResolver } from "./useCompanyResolver";
 import { createEachRow } from "./createEachRow";
 import {
@@ -9,9 +10,15 @@ import {
   toConfiguredValues,
   toInteger,
   toIsoDate,
+  toLocalTime,
   toText,
 } from "./parseCell";
 import type { ImportRow, ProcessImportBatch } from "./types";
+
+const serviceSpaceOptions = serviceSpaceTypes.map((value) => ({
+  value,
+  label: value,
+}));
 
 /** One CSV row, with the values needed before its deal can be created. */
 type DealRow = {
@@ -26,7 +33,7 @@ type DealRow = {
  * holds a company name: matching companies are reused, unknown ones are created.
  */
 export function useDealImport(): ProcessImportBatch {
-  const { dealCategories, dealStages } = useConfigurationContext();
+  const { dealCategories, dealStages } = useConfigurationContext(false);
   const { identity } = useGetIdentity();
   const dataProvider = useDataProvider();
   const getCompanies = useCompanyResolver();
@@ -42,18 +49,23 @@ export function useDealImport(): ProcessImportBatch {
         stage: toConfiguredValue(row.stage, dealStages) ?? dealStages[0]?.value,
       }));
 
+      // CSV does not yet link contacts. Reject won rows before resolving
+      // companies or writing anything, rather than creating orphan companies.
+      const importableRows = rows.filter(({ stage }) => stage !== "won");
+      if (importableRows.length === 0) return 0;
+
       const [companies, indexes] = await Promise.all([
         getCompanies(
-          rows
+          importableRows
             .map(({ companyName }) => companyName)
             .filter((name): name is string => name !== undefined),
         ),
-        appendedIndexes(rows, dataProvider),
+        appendedIndexes(importableRows, dataProvider),
       ]);
 
       const now = new Date().toISOString();
       return createEachRow(
-        rows.map(({ row, companyName, stage }) =>
+        importableRows.map(({ row, companyName, stage }) =>
           dataProvider.create("deals", {
             data: {
               name: toText(row.name),
@@ -62,6 +74,17 @@ export function useDealImport(): ProcessImportBatch {
                 : undefined,
               contact_ids: [],
               categories: toConfiguredValues(row.categories, dealCategories),
+              service_space_type: toConfiguredValue(
+                row.service_space_type,
+                serviceSpaceOptions,
+              ),
+              service_address: toText(row.service_address),
+              service_space_size: toText(row.service_space_size),
+              service_visit_date: toIsoDate(row.service_visit_date)?.slice(
+                0,
+                10,
+              ),
+              service_visit_time: toLocalTime(row.service_visit_time),
               stage,
               description: toText(row.description),
               // amount lands in a bigint column, which rejects "4500.50"

@@ -1,3 +1,2 @@
-name,company,categories,stage,amount,expected_closing_date,description
-New website,Acme,"Website design, UI Design",Opportunity,12000,2026-09-30,Redesign of the public website
-Print campaign,Globex,Print project,Proposal Sent,4500,2026-10-15,
+name,company,categories,stage,amount,expected_closing_date,description,service_space_type,service_address,service_space_size,service_visit_date,service_visit_time
+Desinfección de oficina,Ejemplo,,,,2026-12-01,Espacios de trabajo y superficies,office_warehouse,Calle de ejemplo 123,200 m²,2026-11-15,09:30

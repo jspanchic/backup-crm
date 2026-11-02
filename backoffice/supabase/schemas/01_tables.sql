@@ -68,6 +68,11 @@ create table public.deals (
     company_id bigint,
     contact_ids bigint[],
     categories text[],
+    service_space_type text,
+    service_address text,
+    service_space_size text,
+    service_visit_date date,
+    service_visit_time time without time zone,
     stage text not null,
     description text,
     amount bigint,
@@ -118,6 +123,11 @@ create table public.tasks (
     due_date timestamp with time zone,
     done_date timestamp with time zone,
     sales_id bigint,
+    created_at timestamp with time zone not null default now()
+);
+
+create table public.deal_followup_events (
+    deal_id bigint primary key references public.deals(id) on delete cascade,
     created_at timestamp with time zone not null default now()
 );
 

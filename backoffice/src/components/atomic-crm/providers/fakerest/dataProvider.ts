@@ -640,9 +640,11 @@ export const createDataProvider = ({
           };
         },
         afterCreate: async (result) => {
-          await updateCompany(result.data.company_id, (company) => ({
-            nb_deals: (company.nb_deals ?? 0) + 1,
-          }));
+          if (result.data.company_id != null) {
+            await updateCompany(result.data.company_id, (company) => ({
+              nb_deals: (company.nb_deals ?? 0) + 1,
+            }));
+          }
 
           return result;
         },
@@ -656,9 +658,11 @@ export const createDataProvider = ({
           };
         },
         afterDelete: async (result) => {
-          await updateCompany(result.data.company_id, (company) => ({
-            nb_deals: (company.nb_deals ?? 1) - 1,
-          }));
+          if (result.data.company_id != null) {
+            await updateCompany(result.data.company_id, (company) => ({
+              nb_deals: (company.nb_deals ?? 1) - 1,
+            }));
+          }
 
           return result;
         },

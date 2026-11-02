@@ -116,9 +116,14 @@ export type ContactNote = {
 
 export type Deal = {
   name: string;
-  company_id: Identifier;
+  company_id: Identifier | null;
   contact_ids: Identifier[];
   categories: string[];
+  service_space_type?: string | null;
+  service_address?: string | null;
+  service_space_size?: string | null;
+  service_visit_date?: string | null;
+  service_visit_time?: string | null;
   stage: string;
   description: string;
   amount: number;
@@ -182,7 +187,7 @@ export type ActivityContactNoteCreated = {
 
 export type ActivityDealCreated = {
   type: typeof DEAL_CREATED;
-  company_id: Identifier;
+  company_id: Identifier | null;
   sales_id?: Identifier;
   deal: Deal;
   date: string;
