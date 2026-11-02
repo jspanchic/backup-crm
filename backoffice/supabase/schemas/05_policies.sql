@@ -12,6 +12,7 @@ alter table public.deal_notes enable row level security;
 alter table public.sales enable row level security;
 alter table public.tags enable row level security;
 alter table public.tasks enable row level security;
+alter table public.deal_followup_events enable row level security;
 alter table public.configuration enable row level security;
 alter table public.favicons_excluded_domains enable row level security;
 alter table public.user_invitations enable row level security;
@@ -60,6 +61,10 @@ create policy "Enable read access for authenticated users" on public.tasks for s
 create policy "Enable insert for authenticated users only" on public.tasks for insert to authenticated with check (true);
 create policy "Task Update Policy" on public.tasks for update to authenticated using (true);
 create policy "Task Delete Policy" on public.tasks for delete to authenticated using (true);
+
+-- An event can only be recorded by the opportunity trigger, not by an API insert.
+create policy "Read follow-up events" on public.deal_followup_events for select to authenticated using (true);
+create policy "Create follow-up events from trigger" on public.deal_followup_events for insert to authenticated with check (pg_trigger_depth() > 0);
 
 -- Configuration (admin-only for writes)
 create policy "Enable read for authenticated" on public.configuration for select to authenticated using (true);
