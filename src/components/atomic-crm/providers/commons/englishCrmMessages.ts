@@ -95,6 +95,10 @@ export const englishCrmMessages = {
         new: "New Contact",
         show: "Show contact",
       },
+      autocomplete: {
+        create_item: "Create %{item}",
+        create_label: "Start typing to create a new contact",
+      },
       background: {
         last_activity_on: "Last activity on %{date}",
         added_on: "Added on %{date}",
@@ -126,6 +130,9 @@ export const englishCrmMessages = {
       list: {
         error_loading: "Error loading contacts",
       },
+      show: {
+        error_loading: "Error loading contact",
+      },
       bulk_tag: {
         action: "Tag",
         back: "Back to tags",
@@ -135,7 +142,8 @@ export const englishCrmMessages = {
           "Choose an existing tag or create a new one for the selected contacts.",
         empty: "No tags yet. Create one to tag the selected contacts.",
         error: "Failed to add tag to contacts",
-        noop: "Selected contacts already have this tag",
+        removed:
+          "Tag removed from %{smart_count} contact |||| Tag removed from %{smart_count} contacts",
         success:
           "Tag added to %{smart_count} contact |||| Tag added to %{smart_count} contacts",
         title: "Add tag to contacts",
@@ -182,7 +190,7 @@ export const englishCrmMessages = {
         description: "Description",
         company_id: "Company",
         contact_ids: "Contacts",
-        category: "Category",
+        categories: "Categories",
         amount: "Budget",
         expected_closing_date: "Expected closing date",
         stage: "Stage",
@@ -357,6 +365,7 @@ export const englishCrmMessages = {
         name_label: "Tag name",
         name_placeholder: "Enter tag name",
       },
+      empty: "No tags yet.",
     },
   },
   crm: {
@@ -439,19 +448,38 @@ export const englishCrmMessages = {
       csv_file: "CSV File",
       error:
         "Failed to import this file, please make sure you provided a valid CSV file.",
+      in_progress: "Import in progress…",
       progress:
         "Imported %{importCount} / %{rowCount} records, with %{errorCount} errors.",
       remaining_time: "Estimated remaining time:",
       resource: "Resource",
-      running: "The import is running, please do not close this tab.",
       sample_download: "Download CSV sample",
       sample_hint: "Here is a sample CSV file you can use as a template",
       start: "Start import",
       stop: "Stop import",
+      stopped:
+        "Import stopped. Imported %{importCount} records, with %{errorCount} errors",
       title: "Import data",
     },
     header: {
       import_data: "Import from JSON",
+    },
+    search: {
+      title: "Search",
+      placeholder: "Search contacts, companies, deals, tasks and notes...",
+      hint: "Type at least %{min} characters to search",
+      empty: "No result found",
+      error: "Search is unavailable right now. Please try again.",
+      untitled_result: "(no title)",
+      show_more: "Show more",
+      groups: {
+        contacts: "Contacts",
+        companies: "Companies",
+        deals: "Deals",
+        tasks: "Tasks",
+        contact_notes: "Contact notes",
+        deal_notes: "Deal notes",
+      },
     },
     image_editor: {
       change: "Change",

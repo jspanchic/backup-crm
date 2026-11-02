@@ -106,6 +106,9 @@ grant all on table public.favicons_excluded_domains to anon;
 grant all on table public.favicons_excluded_domains to authenticated;
 grant all on table public.favicons_excluded_domains to service_role;
 
+revoke all on table public.user_invitations from anon, authenticated;
+grant all on table public.user_invitations to service_role;
+
 -- View grants
 grant all on table public.activity_log to anon;
 grant all on table public.activity_log to authenticated;
@@ -160,18 +163,5 @@ grant all on sequence public.tasks_id_seq to anon;
 grant all on sequence public.tasks_id_seq to authenticated;
 grant all on sequence public.tasks_id_seq to service_role;
 
--- Default privileges
-alter default privileges for role postgres in schema public grant all on sequences to postgres;
-alter default privileges for role postgres in schema public grant all on sequences to anon;
-alter default privileges for role postgres in schema public grant all on sequences to authenticated;
-alter default privileges for role postgres in schema public grant all on sequences to service_role;
-
-alter default privileges for role postgres in schema public grant all on functions to postgres;
-alter default privileges for role postgres in schema public grant all on functions to anon;
-alter default privileges for role postgres in schema public grant all on functions to authenticated;
-alter default privileges for role postgres in schema public grant all on functions to service_role;
-
-alter default privileges for role postgres in schema public grant all on tables to postgres;
-alter default privileges for role postgres in schema public grant all on tables to anon;
-alter default privileges for role postgres in schema public grant all on tables to authenticated;
-alter default privileges for role postgres in schema public grant all on tables to service_role;
+-- No default privileges: every new table, view, sequence or function must
+-- declare its grants explicitly in the migration that creates it.

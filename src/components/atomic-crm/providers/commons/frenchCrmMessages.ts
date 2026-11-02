@@ -98,6 +98,10 @@ export const frenchCrmMessages = {
         new: "Nouveau contact",
         show: "Afficher le contact",
       },
+      autocomplete: {
+        create_item: "Créer %{item}",
+        create_label: "Saisissez du texte pour créer un contact",
+      },
       background: {
         last_activity_on: "Dernière activité le %{date}",
         added_on: "Ajouté le %{date}",
@@ -129,6 +133,9 @@ export const frenchCrmMessages = {
       list: {
         error_loading: "Erreur lors du chargement des contacts",
       },
+      show: {
+        error_loading: "Erreur lors du chargement du contact",
+      },
       bulk_tag: {
         action: "Étiqueter",
         back: "Retour aux étiquettes",
@@ -139,7 +146,8 @@ export const frenchCrmMessages = {
         empty:
           "Aucune étiquette pour le moment. Créez-en une pour étiqueter les contacts sélectionnés.",
         error: "Impossible d'ajouter l'étiquette aux contacts",
-        noop: "Les contacts sélectionnés ont déjà cette étiquette",
+        removed:
+          "Étiquette retirée de %{smart_count} contact |||| Étiquette retirée de %{smart_count} contacts",
         success:
           "Étiquette ajoutée à %{smart_count} contact |||| Étiquette ajoutée à %{smart_count} contacts",
         title: "Ajouter une étiquette aux contacts",
@@ -186,7 +194,7 @@ export const frenchCrmMessages = {
         description: "Description",
         company_id: "Entreprise",
         contact_ids: "Contacts",
-        category: "Catégorie",
+        categories: "Catégories",
         amount: "Budget",
         expected_closing_date: "Date de clôture prévue",
         stage: "Étape",
@@ -322,7 +330,7 @@ export const frenchCrmMessages = {
         edit: "Modifier la tâche",
       },
       actions: {
-        postpone_next_week: "Reporté à la semaine prochaine",
+        postpone_next_week: "Reporter à la semaine prochaine",
         postpone_tomorrow: "Reporter à demain",
         title: "Actions de tâche",
       },
@@ -362,6 +370,7 @@ export const frenchCrmMessages = {
         name_label: "Nom de l'étiquette",
         name_placeholder: "Saisir le nom de l'étiquette",
       },
+      empty: "Aucune étiquette pour le moment.",
     },
   },
   crm: {
@@ -445,20 +454,41 @@ export const frenchCrmMessages = {
       csv_file: "Fichier CSV",
       error:
         "Échec de l'importation de ce fichier. Veuillez vous assurer que vous avez fourni un fichier CSV valide.",
+      in_progress: "Import en cours…",
       progress:
         "%{importCount} / %{rowCount} enregistrements importés, avec %{errorCount} erreurs.",
       remaining_time: "Temps restant estimé :",
       resource: "Ressource",
-      running: "L'import est en cours, merci de ne pas fermer cet onglet.",
       sample_download: "Télécharger un exemple CSV",
       sample_hint:
         "Voici un exemple de fichier CSV que vous pouvez utiliser comme modèle",
       start: "Démarrer l'import",
       stop: "Arrêter l'importation",
+      stopped:
+        "Import arrêté. %{importCount} enregistrements importés, %{errorCount} erreurs",
       title: "Importer des données",
     },
     header: {
       import_data: "Importer depuis JSON",
+    },
+    search: {
+      title: "Rechercher",
+      placeholder:
+        "Rechercher un contact, une entreprise, une affaire, une tâche, une note...",
+      hint: "Saisissez au moins %{min} caractères pour lancer la recherche",
+      empty: "Aucun résultat",
+      error:
+        "La recherche est indisponible pour le moment. Veuillez réessayer.",
+      untitled_result: "(sans titre)",
+      show_more: "Afficher plus",
+      groups: {
+        contacts: "Contacts",
+        companies: "Entreprises",
+        deals: "Affaires",
+        tasks: "Tâches",
+        contact_notes: "Notes de contact",
+        deal_notes: "Notes d'affaire",
+      },
     },
     image_editor: {
       change: "Changer",

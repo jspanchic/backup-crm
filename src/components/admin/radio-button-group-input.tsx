@@ -174,11 +174,13 @@ export const RadioButtonGroupInput = (inProps: RadioButtonGroupInputProps) => {
 };
 
 export interface RadioButtonGroupInputProps
-  extends Partial<InputProps>,
+  extends
+    Partial<InputProps>,
     ChoicesProps,
     Omit<
       React.ComponentProps<typeof RadioGroup>,
-      "defaultValue" | "onBlur" | "onChange" | "type"
+      "className" | "defaultValue" | "onBlur" | "onChange" | "type"
     > {
+  className?: string;
   row?: boolean;
 }
