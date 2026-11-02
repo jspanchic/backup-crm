@@ -1,0 +1,30 @@
+# CRM-T1 spike: local Postgres 17 + PostgREST, loopback only.
+# Run with: docker compose --env-file <path-outside-repo>/spike.env up -d
+# Required vars in the env file: PG_SUPERUSER_PASSWORD, AUTHENTICATOR_PASSWORD, JWT_SECRET (>= 32 chars)
+name: crm-spike
+services:
+  db:
+    image: postgres:17.10
+    environment:
+      POSTGRES_PASSWORD: ${PG_SUPERUSER_PASSWORD}
+    ports:
+      - "127.0.0.1:55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  api:
+    image: postgrest/postgrest:v16.4
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${AUTHENTICATOR_PASSWORD}@db:5432/postgres
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: crm_anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_MAX_ROWS: "1000"
+      PGRST_OPENAPI_MODE: follow-privileges
+    ports:
+      - "127.0.0.1:55300:3000"
