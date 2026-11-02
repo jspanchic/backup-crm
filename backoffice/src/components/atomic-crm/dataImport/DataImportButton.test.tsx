@@ -198,8 +198,8 @@ describe("DataImportButton", () => {
       {
         name: "New website",
         company: "Acme",
-        categories: "Website design; Copywriting",
-        stage: "Proposal Sent",
+        categories: "Virus y bacterias; Moho y hongos",
+        stage: "Propuesta enviada",
         amount: "12000",
         expected_closing_date: "2026-09-30",
       },
@@ -217,7 +217,7 @@ describe("DataImportButton", () => {
     expect(deals).toHaveLength(2);
     expect(deals[0]).toMatchObject({
       amount: 12000,
-      categories: ["website-design", "copywriting"],
+      categories: ["virus-bacteria", "mold-fungi"],
       company_id: companies[0].id,
       name: "New website",
       stage: "proposal-sent",
@@ -233,9 +233,9 @@ describe("DataImportButton", () => {
     const { dataProvider, screen } = await renderImport(
       useDealImport,
       [
-        { name: "First", stage: "Opportunity" },
-        { name: "Second", stage: "Opportunity" },
-        { name: "Other column", stage: "Proposal Sent" },
+        { name: "First", stage: "Nueva consulta" },
+        { name: "Second", stage: "Nueva consulta" },
+        { name: "Other column", stage: "Propuesta enviada" },
       ],
       {
         deals: [
@@ -282,7 +282,7 @@ describe("DataImportButton", () => {
       .upload(
         csvFile("deals.csv", [
           "name,company,stage,amount,expected_closing_date",
-          "New website,Acme,Proposal Sent,4500.50,2026-09-30",
+          "New website,Acme,Propuesta enviada,4500.50,2026-09-30",
         ]),
       );
     await screen.getByRole("button", { name: "Start import" }).click();
