@@ -53,22 +53,26 @@ export const IconButtonWithTooltip = ({
   return (
     <TooltipProvider>
       <Tooltip open={open} onOpenChange={setOpen}>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label={
-              typeof translatedLabel === "string" ? translatedLabel : undefined
-            }
-            onClick={handleClick}
-            disabled={disabled}
-            onMouseEnter={handleOpen}
-            onMouseLeave={handleClose}
-            {...props}
-          >
-            {children}
-          </Button>
+        <TooltipTrigger
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={
+                typeof translatedLabel === "string"
+                  ? translatedLabel
+                  : undefined
+              }
+              onClick={handleClick}
+              disabled={disabled}
+              onMouseEnter={handleOpen}
+              onMouseLeave={handleClose}
+              {...props}
+            />
+          }
+        >
+          {children}
         </TooltipTrigger>
         <TooltipContent>
           <p>{translatedLabel}</p>
@@ -78,8 +82,7 @@ export const IconButtonWithTooltip = ({
   );
 };
 
-export interface IconButtonWithTooltipProps
-  extends React.ComponentProps<"button"> {
+export interface IconButtonWithTooltipProps extends React.ComponentProps<"button"> {
   label: React.ReactNode;
   children: React.ReactNode;
 }

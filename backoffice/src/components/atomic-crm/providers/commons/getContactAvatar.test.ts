@@ -1,23 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fetchWithTimeout } from "../../misc/fetchWithTimeout";
 import type { Contact, EmailAndType } from "../../types";
 import { getContactAvatar, hash } from "./getContactAvatar";
 
+vi.mock("../../misc/fetchWithTimeout", () => ({
+  fetchWithTimeout: vi.fn(),
+}));
+
 describe("getContactAvatar", () => {
-  let faviconAvailable = false;
-  beforeEach(async () => {
-    faviconAvailable = false;
-    const existingAvatarHash = await hash("anthony@marmelab.com");
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string) => ({
-        ok:
-          url === `https://www.gravatar.com/avatar/${existingAvatarHash}?d=404` ||
-          (url.endsWith("/favicon.ico") && faviconAvailable),
-      })),
-    );
-  });
-  afterEach(() => {
-    vi.unstubAllGlobals();
+  afterAll(() => {
+    vi.resetAllMocks();
   });
   it("should return gravatar URL for anthony@marmelab.com", async () => {
     const email: EmailAndType[] = [
@@ -33,7 +24,7 @@ describe("getContactAvatar", () => {
   });
 
   it("should return favicon URL if gravatar does not exist", async () => {
-    faviconAvailable = true;
+    vi.mocked(fetchWithTimeout).mockResolvedValue({ ok: true } as Response);
     const email: EmailAndType[] = [
       { email: "no-gravatar@gravatar.com", type: "Work" },
     ];
@@ -69,7 +60,7 @@ describe("getContactAvatar", () => {
   });
 
   it("should return null if email has no gravatar or validate domain", async () => {
-    faviconAvailable = false;
+    vi.mocked(fetchWithTimeout).mockResolvedValue({ ok: false } as Response);
     const email: EmailAndType[] = [
       { email: "anthony@fake-domain-marmelab.com", type: "Work" },
     ];

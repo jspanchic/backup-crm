@@ -88,6 +88,26 @@ mistake would be most costly. Rules:
   items (style, naming, things the hooks already catch).
 - `Hotspots for human review: none identified` is a valid, complete section.
 
+**Record your verdict flag (required, do this BEFORE emitting the contract line).** The
+end-of-feature e2e suite is launched by a hook on your stop, and it keys off this flag, so a
+`BLOCKED` review never pays for a 10-minute suite. Write it yourself with a single Bash call:
+a post-stop transcript read races the flush and silently drops the verdict. The flag dir is
+the `reviews/` sibling of `TICKETS_DIR`, and the key is the literal `FEATURE` (this pass has
+no `TASK_ID`):
+
+- APPROVED:
+  ```bash
+  RD="<TICKETS_DIR>/reviews" && mkdir -p "$RD" && touch "$RD/FEATURE-quality-reviewer"
+  ```
+- BLOCKED:
+  ```bash
+  RD="<TICKETS_DIR>/reviews" && rm -f "$RD/FEATURE-quality-reviewer"
+  ```
+
+Substitute the literal `TICKETS_DIR` path from your spawn prompt. Nothing sets it in a shell
+env, so run verbatim it expands to nothing: `mkdir -p /reviews` fails, the `touch` never
+runs, and the suite never launches on an APPROVED review.
+
 OUTPUT CONTRACT (text, no `SendMessage`), last line exactly one of:
 - `APPROVED`: no imperative findings. Put any non-blocking notes (nits, cleanliness, ponytail
   `net: -N lines`) and the Hotspots section ABOVE the line; the orchestrator forwards them to the
@@ -126,11 +146,16 @@ Migration checklist (BLOCKING):
 - Idempotent (`IF [NOT] EXISTS`), no destructive change without intent.
 - Column types/constraints/FKs match the TS types the migration is derived from.
 - RLS enabled + real policies on every new table (never `USING (true)`).
+- Explicit `GRANT`s to `anon`/`authenticated`/`service_role` for every new
+  table, view and `serial` sequence, in the migration itself (Supabase no
+  longer auto-exposes new `public` objects; a missing grant passes locally
+  and fails with 42501 in production).
 - View-recreation rule respected: `CREATE OR REPLACE VIEW` with the new column
   as the LAST item in the SELECT list (after every existing column AND every
   existing computed `AS` alias). `DROP VIEW … CASCADE; CREATE VIEW …` only
-  for column removal/rename, with dropped dependents re-created in the same
-  migration. Column order in `03_views.sql` must mirror the deployed view.
+  for column removal/rename, with the view's `GRANT`s re-declared right after
+  the `CREATE VIEW` and dropped dependents re-created (with their grants) in
+  the same migration. Column order in `03_views.sql` must mirror the deployed view.
 - No data loss on existing tables; reversible where feasible.
 
 Files to review are listed in the spawn prompt. Read them in
@@ -150,7 +175,7 @@ Detection: your spawn prompt contains `ROLE: quality-reviewer (SIMPLE mode — s
    git -C <WORKTREE_PATH> diff "session-base/$SHORT"..HEAD
    ```
 2. **Apply the scope-relevant rubric only** — SIMPLE diffs are small and schema-focused:
-   - **A.6b (schema changes)** — no `supabase/migrations/*.sql` in the diff (off-limits to SIMPLE); schema files in `supabase/schemas/*.sql` only; new column appended at the end of the `03_views.sql` SELECT, no ordinal shift.
+   - **A.6b (schema changes)** — no `supabase/migrations/*.sql` in the diff (off-limits to SIMPLE); schema files in `supabase/schemas/*.sql` only; new column appended at the end of the `03_views.sql` SELECT, no ordinal shift; every new table, view and `serial` sequence declared in `06_grants.sql` (no default privileges, so a missing grant means `permission denied`).
    - **B.1 (RLS)** — RLS enabled, policies cover required ops, no `USING (true)`.
    - **B.3 (injection)** — no string-concatenated SQL, no `||` of user input.
    - **A.6 (backend patterns)** — input validation, no unbounded queries.
@@ -454,13 +479,16 @@ interactively via the Playwright MCP against a demo-mode server you start inside
    (`kill <pid>` of the `dev:demo` process you started). Leaving it running
    stalls the SubagentStop validation chain.
 
-A red criterion verified here is a `[FAIL]` → REJECTED. The `npx playwright
-screenshot --headless <url> out.png` CLI remains a fallback for a single static
-shot when no interaction is needed.
+A red criterion verified here is a `[FAIL]` → REJECTED. For a single static shot
+with no interaction, use `browser_navigate` + `browser_take_screenshot` as above:
+there is no `npx playwright screenshot` CLI in the pinned Playwright (1.60 exposes
+only `playwright trace screenshot`).
 
 ### C.4 e2e spec sanity (read-only)
 
-Execution is the SubagentStop validation chain's job (`validate-on-stop.mjs`).
+Execution happens once at end-of-feature, on the integrated `_session` worktree
+(`.claude/scripts/e2e-smoke.sh`, driven by the orchestrator); the per-ticket
+SubagentStop chain does NOT run e2e.
 Here you only verify the spec file exists when acceptance criteria require it and
 that it targets the right route/component. (Presence of a test for every new
 behavior is also enforced by A.7.)

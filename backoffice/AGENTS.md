@@ -55,7 +55,7 @@ make registry-build   # Build Shadcn registry
 - **Data Fetching**: React Query (TanStack Query)
 - **Forms**: React Hook Form
 - **Application Logic**: shadcn-admin-kit + ra-core (react-admin headless)
-- **UI Components**: Shadcn UI + Radix UI
+- **UI Components**: Shadcn UI (`base-vega` style) + Base UI
 - **Styling**: Tailwind CSS v4
 - **Backend**: Supabase (PostgreSQL + REST API + Auth + Storage + Edge Functions)
 - **Testing**: Vitest
@@ -166,6 +166,7 @@ When modifying contact or company data structures:
 7. Don't forget to update the related view (`contacts_summary`, `companies_summary`) in `03_views.sql`
 8. Don't forget the export functions
 9. Don't forget the contact merge logic
+10. If the new field stores files uploaded to the attachments bucket, add its column to the reference list in `supabase/functions/delete_note_attachments/index.ts`, otherwise a file it shares with a note gets deleted when that note drops it
 
 ### Running with Test Data
 
@@ -190,4 +191,5 @@ Import `test-data/contacts.csv` via the Contacts page → Import button.
 - Unit tests can be added in the `src/` directory (test files are named `*.test.ts` or `*.test.tsx`)
 - User deletion is not supported to avoid data loss; use account disabling instead
 - Filter operators must be supported by the `supabaseAdapter` when using FakeRest
+- `.npmrc` sets `min-release-age`, so npm refuses a version published too recently: never override it to install a fresher one
 - Optional terse output for solo work: the `concise-dev` style ships at `.claude/styles/concise-dev.md`. To enable it just for yourself, copy it into `.claude/output-styles/` (or `~/.claude/output-styles/`) and run `/output-style concise-dev`, or set `"outputStyle": "concise-dev"` in your own `.claude/settings.local.json`. It is not enabled in the committed `settings.json`.
