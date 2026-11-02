@@ -1,7 +1,7 @@
 # Plan de la Entrega 1 (demo funcional en local)
 
 - **Fecha:** lunes 02/11/2026
-- **Estado:** PROPUESTO. No se ha escrito código ni se ha ejecutado la integración.
+- **Estado:** APROBADO el 02/11/2026 con cinco ajustes (sección 13). CRM-T0b está hecho en `wip/monorepo` y sin publicar; lo demás no ha empezado.
 - **Alcance:** todo en local, sin VPS, sin WAHA real y sin Joel. Decisión tomada: opción C ([ADR-001](../decisiones/ADR-001-proveedor-datos.md)) y destino en el monorepo de `origin/f1-b0-repo-base`.
 - **Convención:** nombres de tablas, columnas, código y commits en inglés. Este documento y `docs/` en español.
 - **Citas:** `[ARQ]`, `[BASE]`, `[SM]` y `[GRAB]` son las claves definidas al inicio de la auditoría. Lo no verificado se marca **SUPUESTO**.
@@ -10,9 +10,9 @@
 
 1. **El monorepo es un esqueleto.** `core-api/`, `db/`, `infra/` y `n8n/` solo tienen un README. Lo real es `backoffice/` (Atomic v1.6.0 del 22/09), el CI y el hook de gitleaks.
 2. **Los `.env` de `backoffice/` son las plantillas del upstream:** idénticos byte a byte (sección 2.2).
-3. **Estimación: 39 h base, ≈47 h con 20% de margen.** Son más que las 28,5 h de la auditoría (sección 5). A 30 h por semana, las 39 h base no caben en la semana del 08/11. La sección 5.2 dice qué recortar y cuándo decidirlo.
+3. **Estimación: 44,5 h base, ≈53 h con 20% de margen** (con el Javier real de la demo, ajuste 2). Son más que las 28,5 h de la auditoría (sección 5). A 30 h por semana, no caben en la semana del 08/11. La sección 5.2 dice qué recortar y cuándo decidirlo.
 4. **Hay un problema causado por mi push anterior:** `origin/crm-t0-rescate` contiene toda la historia del upstream, y el CI escanea todas las ramas con gitleaks (sección 2.3).
-5. **Necesito 8 decisiones tuyas** (sección 11).
+5. **Las 8 decisiones de la sección 11 están aprobadas**, con los ajustes de la sección 13.
 
 ## 2. Qué hay en `origin/f1-b0-repo-base`
 
@@ -53,7 +53,7 @@ Comparé el identificador del blob de git, que cambia si cambia un solo byte.
 
 - El job `secrets` corre `gitleaks git --log-opts="--all"` con `fetch-depth: 0`, así que escanea **todas las ramas del repo**.
 - `crm-t0-rescate` trae toda la historia pública de marmelab. Las fixtures del upstream aparecen ahí en otros commits, y las huellas de `.gitleaksignore` solo valen para `9e638504`.
-- **Efecto esperado (SUPUESTO, no lo pude ver: no hay `gh` ni gitleaks aquí):** el próximo push que dispare `ci.yml` puede poner en rojo el job `secrets`. Mi push no lo disparó, porque esa rama trae los workflows del upstream y no este `ci.yml`.
+- **Verificado el 02/11 con gitleaks 8.30.1 local** (mismas opciones que el CI): escanear las ramas de `origin` da **13 hallazgos**, todos en la historia que trae `crm-t0-rescate`. `wip/monorepo` (15 commits) da 0. Cuando `ci.yml` llegue a esa rama, el job `secrets` se pondría en rojo. Mi push no lo disparó, porque esa rama trae los workflows del upstream y no este `ci.yml`.
 - **No son secretos nuevos.** Es ruido de fixtures públicas, pero rompería el CI.
 - **Propuesta:** borrar `origin/crm-t0-rescate` cuando se publique CRM-T0b. El trabajo queda en el monorepo y en la rama local. Es una acción remota: la hago solo con tu orden (decisión 6).
 
@@ -115,6 +115,24 @@ Comparé el identificador del blob de git, que cambia si cambia un solo byte.
 
 **Upstream después:** `git subtree pull --prefix=backoffice upstream <commit> --squash`, quitar `.devcontainer`, y resolver conflictos solo donde tocamos `backoffice/`. Por eso todo lo nuevo va fuera de esa carpeta salvo el proveedor.
 
+### 3.5 Resultado de CRM-T0b (02/11/2026, `wip/monorepo`, sin publicar)
+
+| Paso | Resultado |
+|---|---|
+| Worktree | `C:\salvionix-platform`, rama `wip/monorepo` desde `origin/f1-b0-repo-base`. `core.hooksPath` solo para ese worktree (`C:\CRM` no cambia) |
+| gitleaks | 8.30.1 oficial con checksum verificado, en `.tools/gitleaks/` (ignorado por git). El hook de commits corre y pasa |
+| Subtree | `git subtree pull --prefix=backoffice . refs/remotes/upstream/main --squash`. Con `<url> <sha>` falla ("couldn't find remote ref"). Squash `5468b58d`. `.devcontainer/` **no** reapareció |
+| Conflicto | Solo `getContactAvatar.test.ts`, como se esperaba. Se tomó la versión del upstream y **pasa**: el arreglo propio ya no hace falta |
+| Commits propios | Los 7 se reaplicaron con `git am -3 --directory=backoffice`, **sin conflictos**. `backoffice/src` y `backoffice/supabase` quedaron **idénticos** a `crm-t0-rescate` (comparación de árboles) |
+| Documentos | Auditoría, ADR-001 (con la causa del avatar corregida como "probable, no verificada") y este plan en `docs/`. `FLUJO` y `GUIA` pasaron a `docs/`. `CLAUDE.md` raíz nuevo; el de `backoffice/` quedó como el del upstream |
+| Convenciones | `UPSTREAM.md`, `NOTICE`, `README`, `DESARROLLO.md` y plantilla de PR actualizados a `CRM-Tn` y `wip/` |
+| Validación (como el CI) | `npm ci --ignore-scripts` ok; `typecheck` ok; `lint` ok; tests `functions` 192 de 192; tests `app` **296 pasaron y 1 omitido en 42 archivos**; `build:demo` ok |
+| gitleaks sobre `wip/monorepo` | 15 commits, 0 hallazgos |
+
+**Los tests `app` fallaron al principio, 5 en 3 archivos**, por nuestro trabajo de T0 y no por el upstream: esos tests afirmaban las etiquetas de fábrica ("Call", "Proposal Sent", "Copywriting") y T0 cambió etapas, categorías y tipos de tarea. Se actualizaron los datos de prueba en `DataImportButton.test.tsx`, `TaskCreateSheet.test.tsx` y `searchDealCategories.test.ts`. No se tocó código de producción.
+
+**Pendiente de T0b:** CI en GitHub (no hay `gh`; lo verá Joel o tú al publicar), y la orden "publica CRM-T0b".
+
 ## 4. Estructura del monorepo tras la Entrega 1
 
 ```text
@@ -153,11 +171,12 @@ Cada tarea se trabaja en `wip/crm-tN` y solo sube con "publica <ID>".
 | 5 | **CRM-T9 (local)** | Disponibilidad, horarios libres, hold con vencimiento, manejo del cruce, vista de citas | 4 |
 | 6 | **CRM-T10** | Número reasignado, "Prueba X", casos de teléfono | 2 |
 | 7 | **CRM-T8 (panel)** | Carpeta definitiva, selección por configuración, autenticación local, lista de citas de solo lectura | 3 |
-| 8 | **CRM-T11 (parte)** | Simulador, mock del bot, contrato HTTP, guion de demo, job de CI | 3 |
-| | **Total base** | | **39** |
-| | **Con 20% de margen** | | **≈47** |
+| 8 | **CRM-T7 (parte local)** | n8n en Docker, copia del workflow TEST sin memoria que llama a `core-api` (sección 7.7) | 5,5 |
+| 9 | **CRM-T11 (parte)** | Simulador, mock del bot (para las pruebas automáticas), contrato HTTP, guion de demo, job de CI | 3 |
+| | **Total base** | | **44,5** |
+| | **Con 20% de margen** | | **≈53** |
 
-CRM-T1 ya se hizo. Las pruebas van dentro de cada tarea, no al final. Dependencias: T0b → T4 → T5 → T6 → (T9, T10) → T8 → T11.
+CRM-T1 ya se hizo. Las pruebas van dentro de cada tarea, no al final. Dependencias: T0b → T4 → T5 → T6 → (T9, T10) → T8 → T7 (local) → T11. El mock del bot se queda para las pruebas automáticas: son deterministas, y Claude no lo es.
 
 ### 5.1 Por qué sube frente a las 28,5 h de la auditoría
 
@@ -169,12 +188,13 @@ CRM-T1 ya se hizo. Las pruebas van dentro de cada tarea, no al final. Dependenci
 | Más pruebas de aceptación y simulador | +3 |
 | Salen n8n real, VPS y sesión de WAHA (pasan a después) | ≈ −4 |
 | Línea base más fina de T4, T5, T6, T9 y T10 | ≈ +2,5 |
+| Javier real en local (CRM-T7, parte local), ajuste 2 | +5,5 |
 
 Estos desgloses son mi estimación, no una medición.
 
 ### 5.2 ¿Cabe en el plazo?
 
-- **Con las horas base, no.** A 30 h por semana, 39 h dan ≈8 días de trabajo: **≈11–12/11**, no el 08/11.
+- **Con las horas base, no.** A 30 h por semana y 5 h por día (domingo libre), 44,5 h dan ≈9 días de trabajo: **≈12–13/11**, no el 08/11.
 - **CRM-T0 y T1 tomaron bastante menos reloj que lo estimado** (ya tienes esas cifras en el chat). Puede repetirse, pero no lo doy por hecho: T4 a T6 tienen más diseño y más revisión tuya.
 - **Punto de control:** al terminar CRM-T4 y T5 comparo horas reales con estimadas y te digo la fecha nueva.
 
@@ -185,6 +205,7 @@ Estos desgloses son mi estimación, no una medición.
 | Panel directo a PostgREST en local, sin proxy (el proxy pasa a la Entrega 2) | 1 h | La demo no muestra la "única puerta". **Producción sigue exigiéndolo** |
 | Citas por SQL en la demo, sin lista en el panel | 1 h | Incumple el punto 8. Solo con tu OK |
 | Outbox sin ritmo ni reintentos | 0,5 h | Se agrega antes de usar WAHA real |
+| Javier real (CRM-T7 local): la demo usa solo el mock del bot | 5,5 h | La demo sigue un guion, no es Javier con Claude. Es el recorte más grande: solo con tu OK |
 
 **No recorto:** firma, exclusión, vencimiento de token, permisos, ni las pruebas de la sección 8.
 
@@ -553,7 +574,19 @@ Node 24, Fastify 5, `pg` con parámetros, sin ORM. Node 24 ejecuta TypeScript si
 
 **Formato simulado.** Los campos salen del Router del workflow TEST: `session`, `payload.from`, `payload.body`, `payload.fromMe`, `payload.participant`, `payload._data.Info.{Sender,SenderAlt,PushName}`, `payload.notifyName`, `payload.media.url`. Las fixtures usan números ficticios.
 
-**SUPUESTO que hay que confirmar con una captura real:** el Router **no usa** `payload.id`, y el dedupe lo necesita. Tampoco se ve ahí el formato real de la firma ni la unidad de `X-Webhook-Timestamp`. Tomo `[ARQ]`:196 y la forma pública de WAHA. El Router tampoco muestra `event`.
+**Formato tomado de la documentación oficial de WAHA** ([eventos](https://waha.devlike.pro/docs/how-to/events/), consultada el 02/11/2026). Es un **SUPUESTO hasta tener una captura real**:
+
+| Dato | Lo que dice la documentación | Cómo lo usan el simulador y `core-api` |
+|---|---|---|
+| Cuerpo | `{"event":"message","session":"default","engine":"WEBJS","payload":{...}}` | El simulador envía ese sobre, con `session` = el canal |
+| `payload.id` | Ejemplo `true_11111111111@c.us_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`. La página no lo define; otra sección da `{fromMe}_{chatId}_{messageId}[_{participant}]` | El simulador genera `false_<chatId>_<32 hex>`. **Clave de dedupe:** `payload.id` completo, junto con el canal |
+| `payload.timestamp` | Segundos (ejemplo `1667561485`; no lo dice expresamente) | El simulador manda segundos |
+| `X-Webhook-Hmac` | Firma del **cuerpo crudo**, `sha512`. La codificación no está explícita (el ejemplo es hexadecimal) | HMAC-SHA512 en hexadecimal, en tiempo constante |
+| `X-Webhook-Hmac-Algorithm` | `sha512` | Se exige que valga `sha512` |
+| `X-Webhook-Timestamp` | **Milisegundos** desde Unix. No se dice si entra en la firma | Se rechaza si pasan más de 5 min. **La firma no lo cubre:** la protección contra repetición es el dedupe por `payload.id` |
+| `X-Webhook-Request-Id` | Id único por petición | Solo para el registro. No es clave de dedupe: no sé si un reintento lo repite |
+
+Falta confirmar con una captura real: el formato exacto de `payload.id` en tu motor (`NOWEB` o `WEBJS`), la codificación de la firma y la unidad de `payload.timestamp`. El Router de TEST no usa `payload.id` ni `event`, así que no sirve de prueba.
 
 **No se traen del Router:** menú de marcas, códigos de acceso, puerta trasera, modo enseñanza. Son la plataforma de pruebas (auditoría, 6.5).
 
@@ -636,6 +669,42 @@ Todas: Bearer obligatorio, esquema `zod` **estricto** (un `contact_id` en el cue
 
 **Propuesta, no incluida en las horas:** mostrar la conversación en la ficha del contacto (+1 h). "La memoria en el CRM" se vería mucho mejor en la demo. Dime si la sumo.
 
+### 7.7 Javier real en la demo (parte local de CRM-T7, ajuste 2)
+
+**Alcance:** n8n en Docker local con una copia del workflow TEST, sin memoria propia, que llama a `core-api` local con el contrato de la sección 7.3. Mensajes simulados. Sin VPS ni WAHA real. **El mock del bot se conserva solo para las pruebas automáticas.**
+
+| Pieza | Decisión |
+|---|---|
+| Imagen | `n8nio/n8n:2.46.2` (publicada el 29/10/2026, más de 1 día). **SUPUESTO:** no conozco la versión del n8n de producción; hay que confirmarla con Joel para que el JSON exportado sea compatible |
+| Red | Solo `127.0.0.1:5678`. Volumen propio. `N8N_ENCRYPTION_KEY` generada en local y **fuera del repo**. Telemetría y diagnóstico apagados |
+| Licencia | Sustainable Use: uso interno y de desarrollo. **No se empaqueta** dentro del producto (auditoría, sección 2) |
+| Workflow | `n8n/workflows/javier-core-api-local.json`, **exportado sin credenciales, sin datos fijados y sin números** |
+| Qué se conserva de TEST | El nodo AI Agent con su mensaje de sistema, y el modelo `claude-sonnet-5-5` que ya usa TEST |
+| Qué sale | Router, menú de marcas y códigos, puerta trasera, modo enseñanza, nodos de WAHA, notas de voz, nodo de memoria de Postgres, y los **datos fijados** (`pinData`), que pueden traer conversaciones reales |
+| Qué entra | Webhook de entrada con verificación de `X-Core-Signature` y `X-Core-Timestamp`; armado del mensaje con el historial del cuerpo; **9 nodos HTTP Request Tool** hacia `/tools/*`, con `Authorization: Bearer` tomado del webhook y **nunca del modelo** |
+| Prompt | Se reescriben 3 zonas del mensaje de sistema de TEST: (1) el cálculo con precios fijos pasa a llamar a `cotizar`; (2) "acepta cualquier hora" pasa a "ofrece solo `horarios_libres` y reserva con `reservar`" (`[SM]`:322); (3) se agregan `escalar` y `confirmar_titular`. **El texto comercial y las afirmaciones del producto no se tocan** sin OK de JM |
+| Respuesta | El agente termina llamando a `responder`; el flujo no escribe a WAHA |
+
+**Horas: 5,5 (base).**
+
+| Tarea | Horas |
+|---|---:|
+| Compose de n8n, volumen, clave de cifrado y arranque | 0,5 |
+| Copia saneada del workflow, nodos de entrada y 9 herramientas | 2,5 |
+| Reescritura de las 3 zonas del prompt | 1 |
+| Pruebas de punta a punta con Claude y ajustes | 1 |
+| Runbook y exportación sin credenciales | 0,5 |
+
+**Qué necesito para la credencial de Anthropic.** No la busco en ningún archivo ni la leo:
+
+1. **Tú creas una llave nueva solo para esta demo**, con un nombre como `salvionix-local-dev` y un **límite de gasto mensual bajo** (propongo 10 USD) en el panel de Anthropic. Si se filtra o el flujo entra en bucle, el daño tiene tope. No reutilices la de producción.
+2. **Tú la escribes en n8n.** Cuando el contenedor esté arriba, abres `http://127.0.0.1:5678`, creas el usuario propietario y, en *Credentials → Create → Anthropic*, pegas la llave. Yo te digo el nombre exacto de la credencial, que es lo único que usa el flujo.
+3. n8n la cifra con `N8N_ENCRYPTION_KEY` dentro de su volumen, que `.gitignore` y gitleaks no dejan subir. La llave nunca pasa por un archivo del repo ni por el chat.
+4. Confírmame el modelo para la demo: propongo `claude-sonnet-5-5`, el mismo de TEST.
+5. **Costo de la demo, SUPUESTO (no medido):** el mensaje de sistema pesa unos 23.000 caracteres y cada vuelta con herramientas lo repite. Estimo 8 a 15 llamadas por recorrido completo, unos 0,2 a 0,5 USD. Lo mido en la primera corrida y te lo digo.
+
+**Riesgos:** (a) Claude no es determinista: la demo puede variar, y por eso las pruebas automáticas usan el mock. (b) Si Claude llama a una herramienta con un campo de más, `core-api` responde 400 y el modelo reintenta: hay que ver cuánto gasta. (c) Hoy el Router decide el idioma del saludo según el país del celular; sin Router, el idioma del cliente viaja en `contacto.idioma`.
+
 ## 8. Dependencias nuevas
 
 **Consultadas hoy en npm.** Se pidió el árbol en una carpeta temporal fuera del repo, solo con `--package-lock-only`, sin instalar nada y con el `.npmrc` del repo. Solo van en `core-api/`. `backoffice/` no cambia.
@@ -679,7 +748,7 @@ Todas: Bearer obligatorio, esquema `zod` **estricto** (un `contact_id` en el cue
 
 ### 8.5 Imágenes de Docker (no son npm)
 
-`postgres:17.10` y `postgrest/postgrest:v16.4`, las del spike, solo en `127.0.0.1`.
+`postgres:17.10` y `postgrest/postgrest:v16.4`, las del spike, y `n8nio/n8n:2.46.2` (7.7), todas solo en `127.0.0.1`.
 
 ## 9. Criterios de aceptación
 
@@ -693,7 +762,10 @@ Pruebas automáticas en `core-api/test/` con Vitest y **Postgres real**, sin sim
 | A2 | Cruce por el margen | Con margen 30: 10:00–11:00 y 11:15–12:15 se rechaza; 11:30–12:30 se acepta |
 | A3 | **Sin contar cancelados ni pruebas** | Un slot `cancelled`, `expired` o `is_test` no bloquea. Otro técnico a la misma hora tampoco |
 | A4 | Carrera | Dos `reservar` en paralelo por el mismo horario: exactamente una gana |
-| A5 | **Hold vencido** | Vencido, `confirmar` da `409 hold_expired`, `horarios_libres` lo ofrece de nuevo, y otro contacto puede reservarlo |
+| A5 | **Un hold vencido no bloquea el horario** | Con un hold ya vencido, otro contacto reserva ese mismo horario y lo logra; el hold viejo queda `expired`. `horarios_libres` lo ofrece de nuevo |
+| A5b | Hold vencido: confirmar | `confirmar` sobre el hold vencido da `409 hold_expired` y no lo revive |
+| A5c | Vencimiento en la misma transacción | `reservar` pasa a `expired` los holds vencidos del técnico **y del contacto** antes del `insert`, en la misma transacción. Si el `insert` falla (cruce real), todo se revierte y no queda nada a medias |
+| A5d | La exclusión no usa `now()` | Prueba de esquema: `pg_get_constraintdef` de `appointments_no_overlap` no contiene `now()` ni `current_`. Un hold vencido sin marcar **sí** choca si se inserta directo por SQL; es intencional, y el barrido lo limpia |
 | A6 | Un hold por contacto | Un segundo `reservar` libera el primero y deja uno solo |
 | A7 | **Reasignado: otra persona** | Se cierra el titular, hay contacto y oportunidad nuevos; el historial sigue en el anterior y **el contexto nuevo no lo incluye** |
 | A8 | Reasignado: misma persona | Sigue con su contacto y su historial |
@@ -754,7 +826,7 @@ Con la pila arriba, ejecuta estos escenarios y deja los datos para mirarlos en e
 |---|---|---|---|---:|
 | **WAHA** entrante | `dev/waha-sim.ts` firma y envía | Sesión de pruebas de BYTOGAM, webhook **por sesión** apuntando a `core-api`, HMAC con clave real. **Primero una captura real** para confirmar `payload.id`, firma y timestamp | Joel, Sebastián | 1–2 |
 | **WAHA** saliente | El simulador recibe `/api/sendText` | Cambiar `WAHA_BASE_URL` y `X-Api-Key`; ajustar el ritmo con Joel | Joel | 0,5 |
-| **Bot** | `dev/mock-bot.ts`: reglas fijas, **sin Claude** | Clonar Javier sin memoria ni Router, tools HTTP con `Authorization` desde el webhook (nunca del LLM), verificar firma, reescribir el cierre: ofrece, no acepta (`[SM]`:322) | Sebastián, OK de Joel | 6 (CRM-T7) |
+| **Bot** | **n8n local con Javier real** (7.7) para la demo, y `dev/mock-bot.ts` para las pruebas automáticas | Llevar el workflow al n8n del VPS: credenciales de ese n8n, URL interna de `core-api`, clave HMAC real y OK de Joel | Sebastián, Joel | 1 (el resto va en la Entrega 1) |
 | **Notas de voz** | Se guarda un marcador | Hoy las transcribe n8n. Pasar el audio transcrito a `core-api` | Sebastián | 1 |
 | **VPS** | Compose local | Postgres propio, redes separadas, secretos en archivos 600, `core-api` y PostgREST sin puertos publicados | Joel, Sebastián | 4 (CRM-T2) |
 | **Login** | Usuario de desarrollo | **POR DECIDIR con Joel:** subdominios y Cloudflare Access | Joel | 5 (CRM-T3) |
@@ -765,9 +837,9 @@ Con la pila arriba, ejecuta estos escenarios y deja los datos para mirarlos en e
 | **Alertas** | Log local | Discord, sin datos de clientes | Joel | 0,5 |
 | **Pruebas reales** | — | 13 casos en el número de BYTOGAM, primero | Todos | CRM-T11 |
 
-**Lo que JM debe saber antes de la demo:** el bot de la demo sigue un guion, no es Javier con Claude. Lo real (agenda, memoria, reglas) es la base y `core-api`. Si JM espera conversar libremente con Javier, hace falta CRM-T7 con n8n, que está fuera de "sin VPS y sin WAHA".
+**Lo que JM debe saber antes de la demo:** con el ajuste 2, Javier es real (Claude vía n8n local), pero los mensajes son simulados y no hay VPS. Las pruebas automáticas siguen usando el mock del bot, que es determinista. Claude puede variar en cada corrida.
 
-## 11. Decisiones que necesito
+## 11. Decisiones (APROBADAS el 02/11/2026, con los ajustes de la sección 13)
 
 | # | Decisión | Mi recomendación |
 |---:|---|---|
@@ -784,6 +856,16 @@ Con la pila arriba, ejecuta estos escenarios y deja los datos para mirarlos en e
 
 ## 12. Fuera de la Entrega 1
 
-n8n real, VPS, Cloudflare, sesión real de WAHA, SMS, notas de voz, formulario, descuento por zona y cobertura de ZIP, PDFs, importar historial, pausa/reanudar desde el panel, edición de citas, gestión de usuarios, adjuntos, STOP y consentimientos, uso de LLM y auditoría.
+n8n del VPS, Cloudflare, sesión real de WAHA, SMS, notas de voz, formulario, descuento por zona y cobertura de ZIP, PDFs, importar historial, pausa/reanudar desde el panel, edición de citas, gestión de usuarios, adjuntos, STOP y consentimientos, uso de LLM y auditoría.
 
 **Antes de campañas reales,** STOP y consentimientos son obligatorios (`[BASE]`:67).
+
+## 13. Ajustes de la aprobación (02/11/2026)
+
+| # | Ajuste de Sebastián | Dónde quedó |
+|---:|---|---|
+| 1 | Holds vencidos: la exclusión no depende de `now()`. `reservar` pasa a `expired` los holds vencidos del técnico, en la misma transacción, antes de insertar. Prueba: "un hold vencido no bloquea el horario" | 6.2 (decisión de diseño 3) y pruebas A5 a A5d |
+| 2 | Javier real en la demo: parte local de CRM-T7 con n8n en Docker, copia del workflow TEST sin memoria, mensajes simulados | 7.7, 5 y 10. **+5,5 h** |
+| 3 | Dedupe: usar el formato de `payload.id` de la documentación oficial de WAHA, marcado SUPUESTO hasta una captura real | 7.2 |
+| 4 | Modelos: CRM-T0b con Sonnet, CRM-T4 con Opus, después Sonnet | Forma de trabajo |
+| 5 | Empezar por CRM-T0b en `wip/`. Nada se publica sin "publica <ID>" | 3.5 |
