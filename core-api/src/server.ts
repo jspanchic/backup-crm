@@ -1,9 +1,8 @@
 import { buildApp } from "./app.ts";
+import { startBackground } from "./background.ts";
 import type { FetchLike } from "./bot.ts";
-import { sweepPendingDispatches } from "./bot.ts";
 import { loadConfig } from "./config.ts";
 import { createDb } from "./db.ts";
-import { runOutboxOnce } from "./outbox.ts";
 
 const config = loadConfig();
 const db = createDb(config);
@@ -20,26 +19,22 @@ const app = buildApp({
 });
 
 const httpFetch: FetchLike = (url, init) => fetch(url, init);
-const botDeps = { config, env: process.env, db, fetch: httpFetch, log: app.log, now: () => new Date() };
-const outboxDeps = {
-  config,
+const stopBackground = startBackground({
+  app,
   db,
-  fetch: httpFetch,
-  log: app.log,
-  sleep: (ms: number) => new Promise<void>((done) => setTimeout(done, ms)),
-  random: Math.random,
-};
-
-// Two small loops: send what is queued, and retry what the bot never accepted.
-const timers = [
-  setInterval(() => void runOutboxOnce(outboxDeps).catch((error: Error) => app.log.error({ err: error.name }, "outbox loop")), 1_000),
-  setInterval(() => void sweepPendingDispatches(botDeps).catch((error: Error) => app.log.error({ err: error.name }, "sweep loop")), 30_000),
-  // Holds that ran out stop blocking a time as soon as they are marked; the booking function also does it.
-  setInterval(() => void db.query("select api.expire_holds()").catch((error: Error) => app.log.error({ err: error.name }, "expiry loop")), 60_000),
-];
+  bot: { config, env: process.env, db, fetch: httpFetch, log: app.log, now: () => new Date() },
+  outbox: {
+    config,
+    db,
+    fetch: httpFetch,
+    log: app.log,
+    sleep: (ms: number) => new Promise<void>((done) => setTimeout(done, ms)),
+    random: Math.random,
+  },
+});
 
 const shutdown = async () => {
-  timers.forEach(clearInterval);
+  stopBackground();
   await app.close();
   await app.idle();
   await db.close();

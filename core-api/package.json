@@ -18,7 +18,10 @@
     "db:baseline": "node scripts/gen-atomic-baseline.ts",
     "start": "node --env-file=../infra/local/.env src/server.ts",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "start:demo": "node --env-file=../infra/local/.env --env-file=../infra/local/demo.env src/server.ts",
+    "sim": "node dev/run-sim.ts",
+    "demo": "node dev/run-demo.ts"
   },
   "dependencies": {
     "fastify": "5.12.7",

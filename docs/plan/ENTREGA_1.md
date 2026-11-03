@@ -1167,3 +1167,30 @@ Por eso **C1.2 y C1.3** (`confirmar` sin hold, y el mensaje de confirmación com
 - **Las horas de la lista salen en la zona horaria del navegador**, no la de la marca. Para Orlando, quien mire desde Ecuador verá la hora de Ecuador.
 - **El tablero muestra un aviso de React** ("Cannot update a component while rendering") en la consola. Viene del código del upstream (el filtro de autocompletado), no de lo nuestro; no afecta el uso.
 - **Producción:** con `NODE_ENV=production` no existe ni el proxy ni la sesión, hasta que llegue Access (CRM-T3).
+
+
+## 22. Resultado de CRM-T11, parte sin Claude (03/11/2026, `wip/crm-t11`, sin publicar)
+
+**Lo que falta de T11** (la demo con Javier en n8n y Claude) espera a CRM-T7a, que necesita la llave de Anthropic. Esta parte deja listo todo lo demás y deja la demo corriendo hoy con un bot de guion.
+
+| Pieza | Estado |
+|---|---|
+| Simulador de WAHA | `core-api/dev/waha-sim.ts`: webhook firmado (HMAC-SHA512 en hexadecimal, encabezados `x-webhook-*`), mensajes de texto, nombre que muestra WhatsApp, duplicados (mismo `payload.id`) y teléfonos ficticios. También hace de WAHA para lo que sale: recibe `POST /api/sendText` y guarda lo enviado |
+| Bot de guion (mock) | `core-api/dev/mock-bot.ts`: verifica la firma de `core-api`, contesta 200 y trabaja por las mismas herramientas con el token que recibe. Sin Claude y con frases fijas. Pregunta siempre el nombre (el de WhatsApp es solo un apodo) |
+| Guion | `core-api/dev/demo.ts`, `npm run demo`: cliente nuevo; cliente que vuelve y es reconocido; cotización; horarios, reserva y confirmación; cruce rechazado; escalar; "Prueba X"; número reasignado; más un duplicado y una firma falsa. **42 comprobaciones**, todas en la base y en lo enviado, no en lo que dice el bot |
+| Segundo plano | `src/background.ts`: la cola de envío, el barrido de entregas pendientes y el vencimiento de reservas provisionales salen de `server.ts` a un módulo que también usan las pruebas |
+| Documentación | `docs/DEMO.md` (guion paso a paso) y `core-api/README.md` |
+| Pruebas | `core-api/test/demo.test.ts` corre el guion completo contra un servicio real y una base real, más pruebas del simulador y del bot de guion (firma, llave, duplicados, 401). La demo también corrió dos veces seguidas por la línea de comandos |
+
+**Dos arreglos que salieron de correr el guion de punta a punta**
+
+| Hallazgo | Corrección |
+|---|---|
+| La herramienta `ficha` devolvía `tipo_cliente` como `home`/`business` mientras que las demás herramientas piden `hogar`/`empresa`: un bot que repitiera lo que lee fallaba | `ficha` traduce a `hogar`/`empresa` |
+| Elegir un horario que otro cliente ya tomó mostraba un error genérico | Los códigos `CX002`, `CX003`, `CX005` y `CX006` se devuelven como 409 con una razón (`invalid_state`, `hold_expired`, `slot_taken`, `slot_not_offered`) para que el bot sepa qué decir |
+
+**Límites que conozco**
+
+- **El bot de guion no entiende lenguaje libre**: prueba el circuito (firma, herramientas, revisión, envío), no la conversación. Si Javier dice algo distinto, la demo con n8n puede dar ❌ en una comprobación que el guion hace pasar.
+- **Los supuestos sobre WAHA** (formato de `payload.id`, codificación de la firma, unidad del timestamp) siguen sin una captura real.
+- **Margen entre servicios, aviso mínimo, horizonte y disponibilidad del técnico** son valores de ejemplo, por confirmar con JM.

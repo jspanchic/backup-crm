@@ -182,8 +182,10 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
     });
 
   tool("GET", "/tools/ficha", { pausable: false }, async ({ conversationId }) => {
-    const { rows } = await deps.db.query("select api.contact_card($1) as card", [conversationId]);
-    return rows[0].card;
+    const { rows } = await deps.db.query<{ card: Record<string, unknown> }>("select api.contact_card($1) as card", [conversationId]);
+    const card = rows[0].card;
+    // The bot speaks Spanish on the way in (tipo_cliente: hogar | empresa), so it hears the same on the way out.
+    return { ...card, tipo_cliente: card.tipo_cliente === "home" ? "hogar" : card.tipo_cliente === "business" ? "empresa" : null };
   });
 
   tool("POST", "/tools/guardar_datos", { schema: saveDataSchema }, async ({ conversationId }, input) => {

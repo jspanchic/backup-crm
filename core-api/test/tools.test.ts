@@ -163,6 +163,16 @@ describe("bot tools", () => {
       expect(response.body).not.toMatch(/contact_id|deal_id|conversation_id|"id"/);
     });
 
+    it("gives back the type of customer in the same words it was given", async () => {
+      const home = await start();
+      const business = await start();
+      expect((await call(home.token, "GET", "ficha")).json().tipo_cliente).toBeNull();
+      await call(home.token, "POST", "guardar_datos", { tipo_cliente: "hogar" });
+      await call(business.token, "POST", "guardar_datos", { tipo_cliente: "empresa" });
+      expect((await call(home.token, "GET", "ficha")).json().tipo_cliente).toBe("hogar");
+      expect((await call(business.token, "GET", "ficha")).json().tipo_cliente).toBe("empresa");
+    });
+
     it("has no name until the customer gives one", async () => {
       const { token } = await start();
       expect((await call(token, "GET", "ficha")).json().nombre).toBeNull();
