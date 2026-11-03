@@ -1217,4 +1217,31 @@ Por eso **C1.2 y C1.3** (`confirmar` sin hold, y el mensaje de confirmación com
 - **Las notas ya existentes** de un cliente de prueba se marcan al aplicar la migración solo si el cliente ya estaba marcado cuando se creó la nota o cuando pasó a prueba; no se recorre el historial anterior (en la base de demostración no había).
 - **El panel principal** muestra la guía "Qué sigue" mientras no haya notas reales (viene del upstream).
 - **La búsqueda global** sigue encontrando clientes de prueba: es lo esperado cuando alguien busca por nombre.
-- **La conversación carga las últimas 500 mensajes como máximo** y no se actualiza sola: se ve al abrir la ficha o al refrescar.
+- **La conversación carga los primeros 500 mensajes como máximo** (en orden cronológico) y no se actualiza sola: se ve al abrir la ficha o al refrescar.
+
+
+## 24. Resultado de CRM-T9b (03/11/2026, `wip/crm-t9b`, sin publicar)
+
+**T9b = calendario editable:** vista semanal por técnico; crear, confirmar, cancelar y reprogramar citas a través de `core-api`, con las mismas reglas del bot; y gestión de la disponibilidad.
+
+| Pieza | Estado |
+|---|---|
+| Vista | "Citas" abre ahora el calendario (la tabla de solo lectura queda en el botón "Lista"). Una semana, de lunes a domingo, de **un técnico a la vez** (selector). Se dibuja **con el reloj de la marca** (hoy `America/New_York`), no el del navegador: una cita de las 15:00 UTC sale a las 10:00 en invierno y a las 11:00 en verano. Sombreado verde = horas en que el técnico atiende; gris = ausencia; bloques: ámbar = reservada (hold), verde = confirmada, borde discontinuo = de prueba. Canceladas y vencidas no se dibujan |
+| Crear | Botón "Nueva cita" o clic en un hueco (se redondea a la media hora). Se busca la oportunidad por nombre (se muestra con el cliente y la etapa, porque varias se llaman igual), día, hora, técnico y dirección. Con "Confirmar ahora" se reserva y confirma en el mismo paso |
+| Confirmar / cancelar / reprogramar | Desde el bloque. Cancelar pregunta antes. Reprogramar es cancelar y reservar **en una transacción**: si el horario nuevo está ocupado, la cita sigue donde estaba. Una cita confirmada sigue confirmada; una reservada recibe una reserva nueva de 15 min |
+| Las reglas (en la base, migración `0015_calendar.sql`) | Igual que el bot: sin cruces (la restricción de exclusión, con el margen); una reserva a la vez por marca; el horario debe estar dentro de la disponibilidad del técnico y fuera de sus ausencias; no puede estar en el pasado; confirmar exige dirección y una cotización enviada, y deja la oportunidad en "Servicio contratado"; un servicio con cita confirmada no admite otra; un cliente tiene una reserva a la vez. **Distinto del bot a propósito:** el personal **no** está limitado por el aviso mínimo ni por el horizonte de días (puede agendar a 3 semanas), y puede elegir cualquier hora dentro de la ventana, no solo la cuadrícula de horarios ofrecidos |
+| Disponibilidad | Diálogo "Disponibilidad": ventanas semanales por día (varias por día) y ausencias con fechas y motivo. Se reemplazan las ventanas completas. **No se tocan las citas ya reservadas:** el aviso dice cuántas quedaron fuera del horario o cubiertas por la ausencia, para reprogramarlas |
+| `core-api` | 7 rutas nuevas bajo `/admin/agenda/*` (documentadas en `ROUTES.md`, comparadas con las registradas por una prueba), esquema estricto, solo con identidad de desarrollo y nunca en producción. Cada rechazo de la base llega como `{ error, reason }` (por ejemplo `slot_taken`, `address_required`); nunca SQL. El panel no tiene permiso de escritura sobre el esquema `core`: solo `core_api` ejecuta las funciones |
+| Arreglo de paso | `db:migrate` ahora avisa a PostgREST que recargue el esquema: sin eso una vista nueva daba 404 hasta reiniciarlo |
+| Pruebas | `core-api`: **658 pasan** (+55: 30 de la base, 17 de las rutas, permisos). Incluye 8 reservas simultáneas del mismo horario en 5 rondas (una gana por técnico, el resto recibe un rechazo limpio) y una comprobación de que quitar el candado por marca hace fallar la prueba. Panel: **371 pasan** (+28: aritmética de fechas incluyendo el cambio de hora de noviembre, la semana, reservar, confirmar, cancelar, reprogramar, disponibilidad). Verificado en el navegador con la demo: reservar, rechazo por horario ocupado, reprogramar, el aviso de "falta cotización" y el diálogo de disponibilidad |
+
+**Límites que conozco**
+
+- **Un técnico por vista.** No hay una vista de todos los técnicos juntos.
+- **El calendario es de la marca del técnico.** Con varias marcas, cada técnico muestra su zona horaria.
+- **Confirmar desde el panel no le escribe al cliente.** El bot manda el mensaje de confirmación por WhatsApp; cuando confirma una persona, el aviso al cliente lo hace ella.
+- **Cancelar una cita confirmada no cambia la etapa** de la oportunidad (sigue en "Servicio contratado"): se cambia a mano con el selector de etapa.
+- **No hay historial de quién hizo qué.** Hoy el usuario es el de desarrollo; con Access (CRM-T3) se guardará quién agendó, canceló o movió.
+- **Las ventanas de disponibilidad** se guardan sin tocar las citas existentes por decisión: cambiar el horario no cancela a nadie.
+- **Los documentos** (orden de compra y de trabajo) no se generan todavía (CRM-T14, Entrega 2): cuando existan, cancelar o mover una cita confirmada tendrá que anularlos.
+- **Dispositivos táctiles:** la cuadrícula se desplaza en horizontal en pantallas estrechas; no se probó en teléfono.

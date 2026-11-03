@@ -103,6 +103,8 @@ export const migrate = async (database: string): Promise<string[]> => {
       }
       applied.push(file);
     }
+    // PostgREST keeps the shape of the schema in memory: without this a new view answers 404 until it restarts.
+    if (applied.length) await client.query("select pg_notify('pgrst', 'reload schema')");
     return applied;
   } finally {
     await client.end();

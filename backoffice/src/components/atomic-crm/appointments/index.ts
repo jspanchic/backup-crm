@@ -1,8 +1,10 @@
-import { AppointmentList, type Appointment } from "./AppointmentList";
+import { AppointmentCalendar } from "./AppointmentCalendar";
+import type { Appointment } from "./AppointmentList";
 
-// Read only: there is no create, edit or show page.
+// The calendar is the way in; the read-only table is one click away. Appointments are changed from the
+// calendar, through core-api, never by editing the record.
 export default {
-  list: AppointmentList,
+  list: AppointmentCalendar,
   recordRepresentation: (record: Appointment) =>
     `${record.deal_name} - ${new Date(record.start_at).toLocaleString()}`,
 };
