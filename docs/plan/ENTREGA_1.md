@@ -1,7 +1,7 @@
 # Plan de la Entrega 1 (demo funcional en local)
 
 - **Fecha:** lunes 02/11/2026
-- **Estado:** APROBADO el 02/11/2026 con los ajustes de la sección 13. CRM-T0b y CRM-T4 están hechos en ramas `wip/`, sin publicar. Lo demás no ha empezado.
+- **Estado:** APROBADO el 02/11/2026 con los ajustes de la sección 13. CRM-T0b, CRM-T4 y CRM-T5 están hechos en ramas `wip/`, sin publicar. Lo demás no ha empezado.
 - **Alcance:** todo en local, sin VPS, sin WAHA real y sin Joel. Decisión tomada: opción C ([ADR-001](../decisiones/ADR-001-proveedor-datos.md)) y destino en el monorepo de `origin/f1-b0-repo-base`.
 - **Convención:** nombres de tablas, columnas, código y commits en inglés. Este documento y `docs/` en español.
 - **Citas:** `[ARQ]`, `[BASE]`, `[SM]` y `[GRAB]` son las claves definidas al inicio de la auditoría. Lo no verificado se marca **SUPUESTO**.
@@ -600,9 +600,11 @@ Conserva la forma aprobada de `[ARQ]`:127-141, con las claves en español para n
 
 ```text
 POST <bot_url>
-X-Core-Signature: <HMAC-SHA256 hex del cuerpo crudo>
+X-Core-Signature: <HMAC-SHA256 hex de "<timestamp>.<cuerpo crudo>">
 X-Core-Timestamp: <segundos>
 ```
+
+**Contrato implementado y documentado completo en `docs/contratos/core-api-n8n.md`.** Dos diferencias con lo que dice esta sección, ambas más seguras: la firma incluye el timestamp (un mensaje capturado no se reenvía más tarde), y `mensaje.id` es un id propio (`msg_<n>`), no el de WAHA.
 
 ```json
 {
@@ -610,7 +612,7 @@ X-Core-Timestamp: <segundos>
   "tenant": "salvionix",
   "bot": "javier",
   "canal": "whatsapp",
-  "mensaje": { "id": "msg_123", "texto": "Hola, quiero cotizar" },
+  "mensaje": { "id": "msg_1234", "texto": "Hola, quiero cotizar" },
   "contacto": { "nombre": "Carlos", "nuevo": false, "reverificar": false, "telefono_enmascarado": "+1•••••0123" },
   "historial": [ { "de": "cliente", "texto": "..." }, { "de": "bot", "texto": "..." } ],
   "ficha": { "etapa": "contacted", "zip": null, "cotizacion_vigente": null, "cita": null }
@@ -992,3 +994,41 @@ Con la orden "publica <ID>":
 | CRM-T5 en adelante | `crm-tN-…` | La rama de entrega anterior | |
 
 Cada una es un commit nuevo con `git merge --squash` desde su rama `wip/`, y un push solo de esa rama. **Las ramas `wip/` nunca se suben.**
+
+## 17. Resultado de CRM-T5 (02/11/2026, `wip/crm-t5`, sin publicar)
+
+| Pieza | Estado |
+|---|---|
+| Webhook `POST /hooks/whatsapp` | Verifica canal, firma (HMAC-SHA512 en tiempo constante, 5 min), valida con `zod`, ignora grupos, estados y mensajes propios, normaliza a E.164, redacta tarjetas, y recién entonces escribe. **Responde 200 antes de llamar al bot** |
+| Duplicados | Por canal y `payload.id`, con candado en la base: de 5 entregas simultáneas pasa una |
+| Resolución | Canal, identidad, titular, contacto, conversación y oportunidad en **una transacción** (`api.ingest_inbound`) |
+| Bot | Contexto, token de 15 minutos y llamada firmada. Si falla, un barrido lo reintenta cada 30 s |
+| Cola de envío | Ritmo de 2 a 5 s, 3 intentos con espera creciente, sin doble envío con varios trabajadores |
+| Proxy del panel | Lista cerrada de 14 recursos y sus métodos. Sin identidad de desarrollo, o en producción, **no existe** |
+| Pruebas | **284 pasan** (138 de CRM-T4, 146 nuevas), con Postgres y PostgREST reales |
+| Mutaciones | Quité 22 reglas una por una. Las pruebas detectaron las 22; las de pausa del bot necesitaron quitar sus tres protecciones a la vez, porque cada una cubre a las otras |
+
+**Lo que las pruebas encontraron en mi propio diseño, y se corrigió:**
+
+| Hallazgo | Corrección |
+|---|---|
+| **El id de mensaje de WAHA lleva el teléfono del cliente** (`false_<numero>@c.us_<id>`). Lo iba a mandar a n8n y rompía la regla de que el teléfono completo no viaja | `mensaje.id` es un id propio, `msg_<n>` |
+| El historial ordenado por `sent_at` mezclaba el reloj de WAHA con el de la base | Se ordena por orden de llegada |
+| El plazo de reasignado se medía contra el reloj de la base, no contra el mensaje | Se mide entre este mensaje y el anterior |
+| El primer arreglo del JSON usaba el lector por defecto de Fastify, que **parsea antes de firmar** | Se quitó: el cuerpo se firma tal como llega |
+
+**Criterios del plan que ya pasan:** A15 firma inválida, A16 timestamp viejo, A17 duplicado (y simultáneos), A18 token vencido (a nivel de `verifyConversationToken`; las rutas `/tools/*` que lo usan llegan con CRM-T6), B1 E.164, B2 canal desconocido, B3 ajenos, B12 tarjetas, B15 proxy, y "todo lo que el cliente no debe ver" del contrato.
+
+**No está en CRM-T5, y lo sé:**
+
+- **`confirmar_titular` y el cierre del titular** son CRM-T10. Hoy el contexto solo calcula `reverificar`.
+- **Si WAHA o el bot fallan de forma permanente,** nadie recibe aviso: queda en `failed` o sin despachar. Las alertas a Discord son de CRM-T12.
+- **`/admin/rest` en producción** responde 404 hasta CRM-T3 (Cloudflare Access).
+- **Límite de ritmo por hora** de envíos por sesión (`[ARQ]`:202): solo hay pausa entre mensajes.
+- **Un cliente que escribe con dos números** son dos contactos. Fusionarlos es manual.
+
+**Cosas que cambian el plan, para que las decidas:**
+
+1. **Contactos nuevos se llaman "WhatsApp ••0123"** hasta que el bot guarde el nombre. El panel los muestra así.
+2. **Un mensaje de un canal desconocido se registra sin firma,** porque no tenemos su secreto para verificarlo. Se limita a una fila por minuto y por sesión, y la ruta es solo red interna. Si prefieres rechazarlo sin registrar, es un cambio de una línea.
+3. **`sales_id` de contactos y oportunidades nuevos queda vacío** hasta que exista `core.brands.default_sales_id` (hoy es nulo). El panel funciona, pero nadie es "responsable". Hace falta decidir quién es el responsable de lo que crea el bot.
