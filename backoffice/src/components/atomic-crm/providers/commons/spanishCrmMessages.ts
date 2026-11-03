@@ -281,6 +281,29 @@ export const spanishCrmMessages: CrmMessages = {
           "Se requiere una nota o un archivo adjunto",
       },
     },
+    appointments: {
+      name: "Cita |||| Citas",
+      fields: {
+        start_at: "Fecha y hora",
+        status: "Estado",
+        contact: "Cliente",
+        deal: "Oportunidad",
+        technician: "Técnico",
+        address: "Dirección",
+        is_test: "Prueba",
+      },
+      status: {
+        hold: "Reservada (provisional)",
+        confirmed: "Confirmada",
+        done: "Realizada",
+        cancelled: "Cancelada",
+        no_show: "No asistió",
+        expired: "Vencida",
+      },
+      filters: {
+        any_status: "Todos los estados",
+      },
+    },
     sales: {
       name: "Usuario |||| Usuarios",
       fields: {

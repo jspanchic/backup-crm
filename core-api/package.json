@@ -14,7 +14,9 @@
     "db:bootstrap": "node --env-file=../infra/local/.env scripts/db-bootstrap.ts",
     "db:migrate": "node --env-file=../infra/local/.env scripts/db-migrate.ts",
     "db:seed": "node --env-file=../infra/local/.env scripts/db-seed.ts",
+    "db:seed-demo": "node --env-file=../infra/local/.env scripts/db-seed-demo.ts",
     "db:baseline": "node scripts/gen-atomic-baseline.ts",
+    "start": "node --env-file=../infra/local/.env src/server.ts",
     "test": "vitest --run",
     "typecheck": "tsc --noEmit"
   },

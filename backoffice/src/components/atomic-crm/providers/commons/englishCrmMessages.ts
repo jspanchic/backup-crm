@@ -307,6 +307,29 @@ export const englishCrmMessages = {
         note_or_attachment_required: "A note or an attachment is required",
       },
     },
+    appointments: {
+      name: "Appointment |||| Appointments",
+      fields: {
+        start_at: "Date and time",
+        status: "Status",
+        contact: "Customer",
+        deal: "Deal",
+        technician: "Technician",
+        address: "Address",
+        is_test: "Test",
+      },
+      status: {
+        hold: "Held (provisional)",
+        confirmed: "Confirmed",
+        done: "Done",
+        cancelled: "Cancelled",
+        no_show: "No show",
+        expired: "Expired",
+      },
+      filters: {
+        any_status: "Any status",
+      },
+    },
     sales: {
       name: "User |||| Users",
       fields: {

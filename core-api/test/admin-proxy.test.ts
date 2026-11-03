@@ -3,20 +3,26 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ADMIN_RESOURCES } from "../src/routes/admin-proxy.ts";
 import { createTestApp, type TestApp } from "./app-helpers.ts";
-import { waitForPostgrest } from "./helpers.ts";
+import { ownerClient, waitForPostgrest } from "./helpers.ts";
+import type pg from "pg";
 
 const ORIGIN = "http://127.0.0.1:5173";
 
 describe("panel proxy", () => {
   let test: TestApp;
+  let owner: pg.Client;
 
   beforeAll(async () => {
     await waitForPostgrest();
+    owner = await ownerClient();
     test = createTestApp();
     // PostgREST checks the token against the real clock.
     test.clock.now = new Date();
   });
-  afterAll(() => test.close());
+  afterAll(async () => {
+    await test.close();
+    await owner.end();
+  });
 
   const call = (method: string, path: string, options: { payload?: unknown; headers?: Record<string, string> } = {}) =>
     test.app.inject({
@@ -147,9 +153,11 @@ describe("panel proxy", () => {
       expect(allowed.statusCode).toBe(204);
       expect(allowed.headers["access-control-allow-origin"]).toBe(ORIGIN);
       expect(allowed.headers["access-control-allow-methods"]).toBe("GET, POST, PATCH, DELETE");
+      expect(allowed.headers["access-control-allow-credentials"]).toBe("true");
 
       const foreign = await test.app.inject({ method: "OPTIONS", url: "/admin/rest/contacts", headers: { origin: "https://evil.example" } });
       expect(foreign.headers["access-control-allow-origin"]).toBeUndefined();
+      expect(foreign.headers["access-control-allow-credentials"]).toBeUndefined();
       const response = await call("GET", "contacts_summary?limit=1", { headers: { origin: "https://evil.example" } });
       expect(response.headers["access-control-allow-origin"]).toBeUndefined();
     });
@@ -157,6 +165,73 @@ describe("panel proxy", () => {
     it("exposes Content-Range to the panel", async () => {
       const response = await call("GET", "contacts_summary?limit=1");
       expect(response.headers["access-control-expose-headers"]).toBe("Content-Range");
+    });
+  });
+
+  describe("who the panel is", () => {
+    const person = async (name: string, administrator: boolean) => {
+      const userId = (await owner.query("select gen_random_uuid() as id")).rows[0].id as string;
+      await owner.query("alter table auth.users disable trigger on_auth_user_created");
+      try {
+        await owner.query("insert into auth.users (id, email) values ($1, $2)", [userId, `${name}-${userId}@example.test`]);
+        await owner.query(
+          "insert into public.sales (first_name, last_name, email, administrator, user_id) values ($1, 'Test', $2, $3, $4)",
+          [name, `${name}-${userId}@example.test`, administrator, userId],
+        );
+      } finally {
+        await owner.query("alter table auth.users enable trigger on_auth_user_created");
+      }
+      return userId;
+    };
+
+    it("tells the panel the name, id and role of the development user, and nothing else", async () => {
+      const sub = await person("Marta", true);
+      const own = createTestApp({ ADMIN_DEV_SUB: sub });
+      own.clock.now = new Date();
+      try {
+        const response = await own.app.inject({ method: "GET", url: "/admin/session", headers: { origin: ORIGIN } });
+        expect(response.statusCode).toBe(200);
+        expect(Object.keys(response.json()).sort()).toEqual(["administrator", "avatar", "first_name", "id", "last_name"]);
+        expect(response.json()).toMatchObject({ first_name: "Marta", administrator: true });
+        expect(response.headers["access-control-allow-origin"]).toBe(ORIGIN);
+        expect(response.body).not.toContain("@");
+      } finally {
+        await own.close();
+      }
+    });
+
+    it("says an ordinary user is not an administrator", async () => {
+      const own = createTestApp({ ADMIN_DEV_SUB: await person("Luis", false) });
+      own.clock.now = new Date();
+      try {
+        expect((await own.app.inject({ method: "GET", url: "/admin/session" })).json().administrator).toBe(false);
+      } finally {
+        await own.close();
+      }
+    });
+
+    it("answers 401 when the identity is not a user of the system, or is disabled", async () => {
+      expect((await test.app.inject({ method: "GET", url: "/admin/session" })).statusCode).toBe(401);
+      const sub = await person("Ana", false);
+      await owner.query("update public.sales set disabled = true where user_id = $1", [sub]);
+      const own = createTestApp({ ADMIN_DEV_SUB: sub });
+      own.clock.now = new Date();
+      try {
+        expect((await own.app.inject({ method: "GET", url: "/admin/session" })).statusCode).toBe(401);
+      } finally {
+        await own.close();
+      }
+    });
+
+    it("does not exist without a development identity or in production", async () => {
+      for (const overrides of [{ ADMIN_DEV_SUB: undefined }, { NODE_ENV: "production" }]) {
+        const bare = createTestApp(overrides);
+        try {
+          expect((await bare.app.inject({ method: "GET", url: "/admin/session" })).statusCode).toBe(404);
+        } finally {
+          await bare.close();
+        }
+      }
     });
   });
 

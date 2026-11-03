@@ -1,7 +1,15 @@
 import { CRM } from "@/components/atomic-crm/root/CRM";
+import {
+  getAuthProvider as getCoreApiAuthProvider,
+  getDataProvider as getCoreApiDataProvider,
+} from "@/components/atomic-crm/providers/core-api";
 
 /**
  * Application entry point
+ *
+ * The data provider is chosen by configuration, not by editing CRM.tsx:
+ *  - VITE_DATA_PROVIDER=core-api  -> the panel talks to core-api (VITE_CORE_API_URL)
+ *  - anything else                -> the original Supabase provider
  *
  * Customize Atomic CRM by passing props to the CRM component:
  *  - companySectors
@@ -31,6 +39,17 @@ import { CRM } from "@/components/atomic-crm/root/CRM";
  *    />
  * );
  */
-const App = () => <CRM />;
+const useCoreApi = import.meta.env.VITE_DATA_PROVIDER === "core-api";
+
+// Built once, outside the component, so a re-render never creates a second provider.
+// With the default provider this is empty and CRM builds the Supabase ones itself.
+const coreApiProviders = useCoreApi
+  ? {
+      dataProvider: getCoreApiDataProvider(),
+      authProvider: getCoreApiAuthProvider(),
+    }
+  : {};
+
+const App = () => <CRM {...coreApiProviders} />;
 
 export default App;

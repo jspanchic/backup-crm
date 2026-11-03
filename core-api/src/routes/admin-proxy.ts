@@ -48,6 +48,8 @@ export const adminProxy = (app: FastifyInstance, deps: AppDeps): void => {
     if (origin && origins.has(origin)) {
       reply.header("Access-Control-Allow-Origin", origin);
       reply.header("Vary", "Origin");
+      // The panel sends its cookie (Cloudflare Access): the browser only accepts that with this header.
+      reply.header("Access-Control-Allow-Credentials", "true");
       reply.header("Access-Control-Expose-Headers", "Content-Range");
     }
   };
@@ -58,6 +60,20 @@ export const adminProxy = (app: FastifyInstance, deps: AppDeps): void => {
     reply.header("Access-Control-Allow-Headers", "Content-Type, Prefer, Range");
     reply.header("Access-Control-Max-Age", "600");
     return reply.code(204).send();
+  });
+
+  // Who the panel is talking as. In development this is ADMIN_DEV_SUB; with Access it will be the signed-in user.
+  app.get("/admin/session", async (request, reply) => {
+    cors(request, reply);
+    if (!config.ADMIN_DEV_SUB) return reply.code(401).send({ error: "unauthorized" });
+    const token = await signPostgrestToken(config.PGRST_JWT_SECRET, config.ADMIN_DEV_SUB, deps.now());
+    const upstream = await deps.proxyFetch(
+      `${config.POSTGREST_URL}/sales?user_id=eq.${config.ADMIN_DEV_SUB}&select=id,first_name,last_name,avatar,administrator&disabled=eq.false&limit=1`,
+      { method: "GET", headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, signal: AbortSignal.timeout(10_000) },
+    );
+    const rows = upstream.status === 200 ? ((await upstream.json()) as unknown[]) : [];
+    if (!rows.length) return reply.code(401).send({ error: "unauthorized" });
+    return reply.code(200).send(rows[0]);
   });
 
   app.route({

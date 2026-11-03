@@ -1139,3 +1139,31 @@ Por eso **C1.2 y C1.3** (`confirmar` sin hold, y el mensaje de confirmación com
 - **"Prueba" como primer nombre real** (un cliente que se llame así) queda marcado como prueba: se corrige a mano. Lo contrario, un apellido "Prueba", no marca.
 - **Nada desmarca solo.** Si alguien marcó por error un cliente real, hay que cambiar `is_test` a mano.
 - **El plazo de reasignación** (90 días de ejemplo; el Router de TEST usa 180) sigue por confirmar con JM.
+
+
+## 21. Resultado de CRM-T8a (02/11/2026, `wip/crm-t8a`, sin publicar)
+
+**T8a = panel de lectura con contactos, oportunidades y citas.** Lo que falta de T8 (login con Access, conversación en la ficha, quitar lo no usado) queda para la Entrega 2.
+
+| Pieza | Estado |
+|---|---|
+| Proveedor definitivo | `backoffice/src/components/atomic-crm/providers/core-api/`, que viene del spike (`wip/crm-t1`). Ya no lleva token ni `VITE_SPIKE_TOKEN`: el navegador solo habla con `core-api` (`/admin/rest/*`) |
+| Selección por configuración | `VITE_DATA_PROVIDER=core-api` (y `VITE_CORE_API_URL`) en `backoffice/src/App.tsx`. Sin la variable, sigue Supabase. **`CRM.tsx` ya no tiene atajo**: solo se le suma el recurso de citas |
+| Identidad | Nueva ruta `GET /admin/session`: `core-api` dice quién es el usuario (hoy `ADMIN_DEV_SUB`, el responsable de la demo; con Access será el usuario real). Devuelve nombre, id y rol, nada más. La CORS acepta cookies solo del origen del panel |
+| Citas | Recurso `appointments` de solo lectura sobre `appointments_summary`: fecha y hora, estado (con "Prueba" aparte), cliente y oportunidad con enlace, técnico y dirección. Filtro por estado. Sin botones de crear, editar ni borrar; si algo intentara escribir, el proveedor lo rechaza |
+| Menú | Pestaña "Citas" en español, inglés y francés |
+| Lo que no funciona sin Supabase | Registro, usuarios, contraseñas, combinar contactos: dicen claramente que necesitan una ruta de `core-api` (Entrega 2). No se llama a Supabase |
+| Datos de demostración | `db/seeds/demo/` y `npm run db:seed-demo`: 5 contactos ficticios, 5 oportunidades y 3 citas (una confirmada, dos provisionales, una de prueba) |
+| Pruebas | Panel: **316 pasan** (44 archivos, 20 nuevas: proveedor, auth y lista de citas). `core-api`: **584 pasan** (+5: `/admin/session` y CORS). Lint, typecheck y `build:demo` bien |
+| Verificado en el navegador | `core-api` y el panel levantados en local con la base de demostración: la lista de citas con filtro por estado, los contactos y el tablero de oportunidades cargan por `core-api` |
+
+**Cómo verlo** (desde `core-api/`, con Docker): `npm run local:up`, `db:bootstrap`, `db:migrate`, `db:seed`, `db:seed-demo`, `npm start`; y desde `backoffice/`: `VITE_DATA_PROVIDER=core-api npm run dev`.
+
+**Lo que cambió en `backoffice/`** (para `UPSTREAM.md`): `App.tsx`, `root/CRM.tsx` (un recurso), `layout/Header.tsx` (una pestaña), los tres catálogos de mensajes, y las carpetas nuevas `appointments/` y `providers/core-api/`.
+
+**Límites que conozco**
+
+- **Los clientes y oportunidades de prueba se ven en el panel** (la cita lleva la marca "Prueba", pero no hay un filtro). Sacarlos de reportes y del tablero principal es Entrega 2.
+- **Las horas de la lista salen en la zona horaria del navegador**, no la de la marca. Para Orlando, quien mire desde Ecuador verá la hora de Ecuador.
+- **El tablero muestra un aviso de React** ("Cannot update a component while rendering") en la consola. Viene del código del upstream (el filtro de autocompletado), no de lo nuestro; no afecta el uso.
+- **Producción:** con `NODE_ENV=production` no existe ni el proxy ni la sesión, hasta que llegue Access (CRM-T3).

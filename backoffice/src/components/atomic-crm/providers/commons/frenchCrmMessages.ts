@@ -311,6 +311,29 @@ export const frenchCrmMessages = {
         note_or_attachment_required: "Une note ou une pièce jointe est requise",
       },
     },
+    appointments: {
+      name: "Rendez-vous |||| Rendez-vous",
+      fields: {
+        start_at: "Date et heure",
+        status: "Statut",
+        contact: "Client",
+        deal: "Opportunité",
+        technician: "Technicien",
+        address: "Adresse",
+        is_test: "Test",
+      },
+      status: {
+        hold: "Réservé (provisoire)",
+        confirmed: "Confirmé",
+        done: "Réalisé",
+        cancelled: "Annulé",
+        no_show: "Absent",
+        expired: "Expiré",
+      },
+      filters: {
+        any_status: "Tous les statuts",
+      },
+    },
     sales: {
       name: "Utilisateur |||| Utilisateurs",
       fields: {

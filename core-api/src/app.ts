@@ -10,7 +10,7 @@ import { whatsappRoutes } from "./routes/whatsapp.ts";
 export type ProxyFetch = (
   url: string,
   init: { method: string; headers: Record<string, string>; body?: Buffer; signal: AbortSignal },
-) => Promise<{ status: number; headers: { get: (name: string) => string | null }; arrayBuffer: () => Promise<ArrayBuffer> }>;
+) => Promise<{ status: number; headers: { get: (name: string) => string | null }; arrayBuffer: () => Promise<ArrayBuffer>; json: () => Promise<unknown> }>;
 
 export type AppDeps = BotDeps & {
   outboxFetch: OutboxDeps["fetch"];
