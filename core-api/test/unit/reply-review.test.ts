@@ -9,6 +9,7 @@ const facts = (overrides: Partial<ReplyFacts> = {}): ReplyFacts => ({
   rates: { covered: 0.12, uncovered: 0.06, discount_pct: 7, min_total: 150 },
   quote: { total: 1060, subtotal: 1140, discount: 80, covered_cost: 960, uncovered_cost: 180 },
   appointment: null,
+  offered_slots: [],
   ...overrides,
 });
 
@@ -110,7 +111,6 @@ describe("a confirmation needs a confirmed appointment", () => {
     "¿Confirmas la dirección?",
     "Te reservo ese horario por 15 minutos",
     "¿Te queda mejor por la mañana o por la tarde?",
-    "Tengo estos horarios libres: martes 10:00 y miércoles 14:00",
   ])("lets through %j, which does not claim anything", (text) => {
     expect(reason(text, facts())).toBe("ok");
   });
@@ -209,4 +209,66 @@ describe("phone numbers", () => {
       expect(reason(text, facts())).toBe("ok");
     },
   );
+});
+
+describe("schedules must come from horarios_libres", () => {
+  // Tuesday June 4 10:00 and Wednesday June 5 14:00 in New York (summer time, UTC-4).
+  const offered = (): ReplyFacts =>
+    facts({
+      offered_slots: [
+        { start_at: "2030-06-04T14:00:00Z", end_at: "2030-06-04T15:00:00Z" },
+        { start_at: "2030-06-05T18:00:00Z", end_at: "2030-06-05T19:00:00Z" },
+      ],
+    });
+
+  it.each([
+    "Tengo estos horarios libres: martes 10:00 y miércoles 14:00",
+    "Te queda bien el martes 4 de junio a las 10:00 AM?",
+    "El miércoles 5 de junio a las 2 pm tengo libre",
+    "Libre el martes de 10:00 a 11:00",
+    "Tengo el miércoles de 2:00 pm a 3:00 pm",
+    "Which works better: June 4 at 10 am or June 5 at 2:00 pm?",
+    "¿Te queda mejor por la mañana o por la tarde?",
+    "Hola, te escribo sobre tu cotización",
+  ])("lets through %j", (text) => {
+    expect(reason(text, offered())).toBe("ok");
+  });
+
+  it.each([
+    ["a time that was never offered", "Tengo libre el martes a las 3 pm"],
+    ["a time the customer proposed", "Perfecto, te agendo a las 5:30 pm"],
+    ["the end time of an offered slot, alone", "El martes a las 11:00 AM te queda?"],
+    ["a 24 hour time that was not offered", "¿Te sirve a las 16:00?"],
+    ["an offered time on a day that was not offered", "Tengo libre el jueves a las 10:00"],
+    ["a date that was not offered", "Para el servicio tengo el 10 de junio a las 10:00"],
+    ["a date in the sentence of a service, with no time", "Podemos hacer el servicio el 20 de junio"],
+    ["a weekday for the service that was not offered", "Tengo disponible el viernes"],
+  ])("stops %s", (_name, text) => {
+    expect(reason(text, offered())).toBe("schedule_not_offered");
+  });
+
+  it("stops every time while nothing was offered, and tells the model to ask first", () => {
+    const result = reviewReply("Te queda bien a las 10:00?", facts());
+    expect(result).toMatchObject({ ok: false, reason: "schedule_not_offered" });
+    expect(result.ok === false && result.message).toContain("horarios_libres");
+  });
+
+  it("does not check the dates of a quote or its validity", () => {
+    const quote = ["- Fecha de emisión: October 8, 2026", "- Vigencia de la cotización: hasta el 22 de octubre de 2026"].join("\n");
+    expect(reason(quote, facts())).toBe("ok");
+  });
+
+  it("checks each sentence separately: one bad time among good ones is enough", () => {
+    expect(reason("El martes a las 10:00 está libre. También el martes a las 6 pm.", offered())).toBe("schedule_not_offered");
+  });
+
+  it("lets the bot repeat the time of its own hold or appointment", () => {
+    const held = facts({ appointment: { status: "hold", start_at: "2030-06-04T15:00:00Z", end_at: "2030-06-04T16:00:00Z" } });
+    expect(reason("Te reservo el martes 4 de junio a las 11:00 AM por 15 minutos", held)).toBe("ok");
+  });
+
+  it("reads times in the time zone of the brand", () => {
+    expect(reason("Te queda bien a las 18:00?", offered())).toBe("schedule_not_offered"); // 18:00 is the UTC hour of the Wednesday slot, not New York
+    expect(reason("Te queda bien a las 10:00?", offered())).toBe("ok");
+  });
 });

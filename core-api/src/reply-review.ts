@@ -8,6 +8,8 @@
  * the model gets the reason and tries again.
  */
 
+import { localParts, type LocalParts } from "./schedule-time.ts";
+
 export type ReplyFacts = {
   timezone: string;
   currency: string | null;
@@ -16,6 +18,8 @@ export type ReplyFacts = {
   rates: { covered: number; uncovered: number; discount_pct: number; min_total: number } | null;
   quote: { total: number; subtotal: number; discount: number; covered_cost: number; uncovered_cost: number } | null;
   appointment: { status: "hold" | "confirmed"; start_at: string; end_at: string } | null;
+  /** Times shown to this conversation by horarios_libres in the last day. */
+  offered_slots: { start_at: string; end_at: string }[];
 };
 
 export type ReviewResult = { ok: true } | { ok: false; reason: ReviewReason; message: string };
@@ -25,6 +29,7 @@ export type ReviewReason =
   | "confirmation_without_appointment"
   | "time_mismatch"
   | "date_mismatch"
+  | "schedule_not_offered"
   | "url_not_allowed"
   | "phone_in_reply"
   | "phone_unavailable";
@@ -87,23 +92,6 @@ const WEEKDAYS: Record<string, number> = {
   sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6,
 };
 
-type LocalParts = { year: number; month: number; day: number; weekday: number; minutes: number };
-
-const localParts = (iso: string, timeZone: string): LocalParts => {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone, year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric",
-    weekday: "short", hourCycle: "h23",
-  }).formatToParts(new Date(iso));
-  const get = (type: string) => parts.find((part) => part.type === type)!.value;
-  return {
-    year: Number(get("year")),
-    month: Number(get("month")),
-    day: Number(get("day")),
-    weekday: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(get("weekday")),
-    minutes: Number(get("hour")) * 60 + Number(get("minute")),
-  };
-};
-
 const timesIn = (text: string): number[] => {
   const minutes: number[] = [];
   const to24 = (hour: number, minute: number, meridiem?: string): number | null => {
@@ -154,6 +142,12 @@ const weekdaysIn = (text: string): number[] => {
   return [...text.matchAll(new RegExp(`(?<![\\p{L}])(${names})(?![\\p{L}])`, "giu"))].map((m) => WEEKDAYS[m[1].toLowerCase()]);
 };
 
+type SlotTimes = { start: number; end: number };
+
+/** A start time is always fine. An end time is fine only when the sentence also says the start ("de 10:00 a 11:00"). */
+const timeAllowed = (minutes: number, mentioned: number[], slots: SlotTimes[]): boolean =>
+  slots.some((slot) => slot.start === minutes || (slot.end === minutes && mentioned.includes(slot.start)));
+
 const reviewConfirmation = (text: string, facts: ReplyFacts): ReviewResult => {
   if (!CONFIRMATION_CLAIM.test(text)) return { ok: true };
   const appointment = facts.appointment;
@@ -166,8 +160,8 @@ const reviewConfirmation = (text: string, facts: ReplyFacts): ReviewResult => {
 
   const start = localParts(appointment.start_at, facts.timezone);
   const end = localParts(appointment.end_at, facts.timezone);
-  const allowedTimes = [start.minutes, end.minutes];
-  const badTime = timesIn(text).find((minutes) => !allowedTimes.includes(minutes));
+  const mentioned = timesIn(text);
+  const badTime = mentioned.find((minutes) => !timeAllowed(minutes, mentioned, [{ start: start.minutes, end: end.minutes }]));
   if (badTime !== undefined) {
     return reject("time_mismatch", "La hora que escribes no es la de la cita confirmada. Usa exactamente la de la ficha.");
   }
@@ -213,9 +207,48 @@ const reviewPhones = (text: string, facts: ReplyFacts): ReviewResult => {
   return { ok: true };
 };
 
+// A sentence that talks about a service time. Dates elsewhere (issue date, validity) are not checked here.
+const SCHEDULING_WORDS = /\b(servicio|cita|visita|agend\w*|horario|appointment|service|visit|schedul\w*|available|disponible)\b/i;
+
+const sentences = (text: string): string[] => text.split(/\n+|(?<=[.!?])\s+/).filter(Boolean);
+
+/**
+ * Every clock time the bot writes must be one it was shown by horarios_libres in this conversation
+ * (or the time of its own hold or appointment). Dates and weekdays are checked in the sentences that talk
+ * about the service or contain a time. The bot offers times; it does not make them up or accept the customer's.
+ */
+const reviewSchedule = (text: string, facts: ReplyFacts): ReviewResult => {
+  const allowedSlots = [...facts.offered_slots, ...(facts.appointment ? [facts.appointment] : [])];
+  const allowed = allowedSlots.flatMap((slot) => [localParts(slot.start_at, facts.timezone), localParts(slot.end_at, facts.timezone)]);
+  const slotTimes: SlotTimes[] = allowedSlots.map((slot) => ({
+    start: localParts(slot.start_at, facts.timezone).minutes,
+    end: localParts(slot.end_at, facts.timezone).minutes,
+  }));
+  const allowedDays = allowed.map((p) => p);
+
+  const hint = allowedSlots.length
+    ? "Los horarios permitidos son los que salieron de horarios_libres en esta conversación."
+    : "Todavía no has consultado horarios_libres en esta conversación: llámalo antes de mencionar una hora.";
+
+  for (const sentence of sentences(text)) {
+    const times = timesIn(sentence);
+    if (times.some((minutes) => !timeAllowed(minutes, times, slotTimes))) {
+      return reject("schedule_not_offered", `Esa hora no salió de horarios_libres. ${hint}`);
+    }
+    if (times.length === 0 && !SCHEDULING_WORDS.test(sentence)) continue;
+    const badDay = daysIn(sentence).find((readings) => !readings.some((d) => allowedDays.some((a) => a.month === d.month && a.day === d.day)));
+    if (badDay) return reject("schedule_not_offered", `Esa fecha no salió de horarios_libres. ${hint}`);
+    const weekdays = weekdaysIn(sentence);
+    if (weekdays.some((weekday) => !allowedDays.some((a) => a.weekday === weekday))) {
+      return reject("schedule_not_offered", `Ese día de la semana no salió de horarios_libres. ${hint}`);
+    }
+  }
+  return { ok: true };
+};
+
 /** Order matters only for which reason the model sees first. Nothing here changes the text. */
 export const reviewReply = (text: string, facts: ReplyFacts): ReviewResult => {
-  for (const review of [reviewPhones, reviewLinks, reviewAmounts, reviewConfirmation]) {
+  for (const review of [reviewPhones, reviewLinks, reviewAmounts, reviewConfirmation, reviewSchedule]) {
     const result = review(text, facts);
     if (!result.ok) return result;
   }

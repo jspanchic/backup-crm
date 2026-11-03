@@ -11,9 +11,12 @@ registradas: agregar una ruta sin documentarla la hace fallar.
 | POST | `/tools/guardar_datos` | Bot | Token. Esquema estricto: un campo de más, incluido cualquier id, da 400 |
 | POST | `/tools/cotizar` | Bot | Token. Esquema estricto. No acepta montos: los calcula la base |
 | POST | `/tools/escalar` | Bot | Token. Esquema estricto. Pausa el bot |
+| POST | `/tools/horarios_libres` | Bot | Token. Registra lo que muestra: solo esos horarios se pueden reservar o mencionar |
+| POST | `/tools/reservar` | Bot | Token. Solo un horario ofrecido en esta conversación. Reserva provisional de 15 min |
+| POST | `/tools/confirmar` | Bot | Token. Sin campos. Exige hold vigente, dirección y cotización. Envía el mensaje de confirmación |
 | POST | `/tools/responder` | Bot | Token. El texto se revisa contra la base antes de encolarlo |
 | GET, POST, PATCH, DELETE | `/admin/rest/*` | Panel | Solo con `ADMIN_DEV_SUB` (desarrollo). Lista cerrada de recursos y métodos. Producción: Cloudflare Access (CRM-T3) |
 
 Todas las rutas `/tools/*`: cuerpo de máximo 16 KB; con la conversación pausada responden `409 bot_paused` (menos `ficha`).
 
-Faltan `horarios_libres`, `reservar` y `confirmar` (CRM-T9) y `confirmar_titular` (CRM-T10).
+Falta `confirmar_titular` (CRM-T10).

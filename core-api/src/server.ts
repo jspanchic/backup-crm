@@ -34,6 +34,8 @@ const outboxDeps = {
 const timers = [
   setInterval(() => void runOutboxOnce(outboxDeps).catch((error: Error) => app.log.error({ err: error.name }, "outbox loop")), 1_000),
   setInterval(() => void sweepPendingDispatches(botDeps).catch((error: Error) => app.log.error({ err: error.name }, "sweep loop")), 30_000),
+  // Holds that ran out stop blocking a time as soon as they are marked; the booking function also does it.
+  setInterval(() => void db.query("select api.expire_holds()").catch((error: Error) => app.log.error({ err: error.name }, "expiry loop")), 60_000),
 ];
 
 const shutdown = async () => {

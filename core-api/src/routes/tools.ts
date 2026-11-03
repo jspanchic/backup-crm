@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { AppDeps } from "../app.ts";
 import { PHONE_PLACEHOLDER, reviewReply, type ReplyFacts } from "../reply-review.ts";
+import { confirmationMessage, slotLabel, type Language } from "../schedule-time.ts";
 import { verifyConversationToken } from "../token.ts";
 import { parsePhoneNumberFromString } from "libphonenumber-js/min";
 
@@ -55,6 +56,9 @@ const quoteSchema = z
   });
 
 const escalateSchema = z.strictObject({ motivo: text(300) });
+const freeSlotsSchema = z.strictObject({ desde: z.iso.date().optional(), dias: z.int().min(1).max(14).optional() });
+const reserveSchema = z.strictObject({ inicio: z.iso.datetime({ offset: true }) });
+const confirmSchema = z.strictObject({});
 const replySchema = z.strictObject({ texto: text(4000) });
 
 const toQuoteInputs = (input: z.infer<typeof quoteSchema>) => ({
@@ -135,6 +139,8 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
       if (code === "CX004") return reply.code(400).send({ error: "invalid_input", message: (error as Error).message });
       if (code === "CX002") return reply.code(409).send({ error: "invalid_state", message: (error as Error).message });
       if (code === "CX003") return reply.code(409).send({ error: "hold_expired" });
+      if (code === "CX005") return reply.code(409).send({ error: "slot_taken", message: "Ese horario ya no está disponible. Consulta horarios_libres otra vez y ofrece otro." });
+      if (code === "CX006") return reply.code(409).send({ error: "slot_not_offered", message: "Solo puedes reservar un horario que salió de horarios_libres en esta conversación." });
       throw error;
     }
   };
@@ -157,7 +163,7 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
 
         let input = undefined as T;
         if (options.schema) {
-          const parsed = options.schema.safeParse(readBody(request));
+          const parsed = options.schema.safeParse(readBody(request) ?? (method === "POST" ? {} : undefined));
           if (!parsed.success) {
             return reply.code(400).send({
               error: "invalid_input",
@@ -209,6 +215,47 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
   tool("POST", "/tools/escalar", { schema: escalateSchema }, async ({ conversationId }, input) => {
     const { rows } = await deps.db.query("select api.escalate($1, $2) as result", [conversationId, input.motivo]);
     return rows[0].result;
+  });
+
+  const languageOf = (facts: { language: string | null }): Language => (facts.language === "en" ? "en" : "es");
+
+  tool("POST", "/tools/horarios_libres", { schema: freeSlotsSchema }, async ({ conversationId }, input) => {
+    const { rows } = await deps.db.query<{ result: { zona_horaria: string; horarios: { inicio: string; fin: string }[] } }>(
+      "select api.free_slots($1, $2::date, $3::int) as result",
+      [conversationId, input.desde ?? null, input.dias ?? null],
+    );
+    const { rows: facts } = await deps.db.query<{ facts: { language: string | null } }>("select api.reply_facts($1) as facts", [conversationId]);
+    const { zona_horaria, horarios } = rows[0].result;
+    const language = languageOf(facts[0].facts);
+    return {
+      zona_horaria,
+      horarios: horarios.map((slot) => ({ ...slot, texto: slotLabel(slot.inicio, zona_horaria, language) })),
+    };
+  });
+
+  tool("POST", "/tools/reservar", { schema: reserveSchema }, async ({ conversationId }, input) => {
+    const { rows } = await deps.db.query<{ result: { inicio: string; fin: string; vence_en: string } }>(
+      "select api.hold_slot($1, $2::timestamptz) as result",
+      [conversationId, input.inicio],
+    );
+    return { ...rows[0].result, aviso: "Es una reserva provisional: se confirma con confirmar cuando el cliente acepte la orden de compra." };
+  });
+
+  tool("POST", "/tools/confirmar", { schema: confirmSchema }, async ({ conversationId }, _input, reply) => {
+    const { rows } = await deps.db.query<{ facts: ReplyFacts & { language: string | null } }>("select api.reply_facts($1) as facts", [conversationId]);
+    const facts = rows[0].facts;
+    const hold = facts.appointment;
+    if (!hold || hold.status !== "hold") {
+      return reply.code(409).send({ error: "invalid_state", message: "No hay un horario reservado para confirmar. Usa reservar primero." });
+    }
+    // The message is written here, from the appointment in the database, and goes out with the confirmation
+    // in the same transaction: the customer is never told something the database does not hold.
+    const message = confirmationMessage(hold.start_at, facts.timezone, languageOf(facts));
+    const confirmed = await deps.db.query<{ result: { inicio: string; fin: string } }>(
+      "select api.confirm_hold($1, $2::timestamptz, $3) as result",
+      [conversationId, hold.start_at, message],
+    );
+    return { confirmado: true, ...confirmed.rows[0].result, mensaje_enviado: true, aviso: "No escribas tú el mensaje de confirmación: ya se envió." };
   });
 
   tool("POST", "/tools/responder", { schema: replySchema }, async ({ conversationId }, input, reply) => {

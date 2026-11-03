@@ -79,8 +79,8 @@ describe("bot tools", () => {
       expect((await call(expired, "GET", "ficha")).statusCode).toBe(401);
       expect((await call(await tokenFor(conversation.id, 1, NOW, "x".repeat(40)), "GET", "ficha")).statusCode).toBe(401);
 
-      await owner.query("insert into core.brands (id, slug, name, timezone) values (2, 'other', 'Other', 'UTC') on conflict do nothing");
-      expect((await call(await tokenFor(conversation.id, 2), "GET", "ficha")).statusCode).toBe(401);
+      const other = (await owner.query("insert into core.brands (slug, name, timezone) values ('other-' || gen_random_uuid(), 'Other', 'UTC') returning id::int")).rows[0].id;
+      expect((await call(await tokenFor(conversation.id, other), "GET", "ficha")).statusCode).toBe(401);
     });
 
     it("accepts a token just before it expires, and rejects it just after", async () => {
@@ -400,17 +400,18 @@ describe("bot tools", () => {
 
     it("uses the price list in force: a new version changes the next quote and not the old one", async () => {
       // A second brand keeps this test from changing the prices of every other test.
-      await owner.query("insert into core.brands (id, slug, name, timezone) values (2, 'other', 'Other', 'UTC') on conflict do nothing");
+      const brandTwo = (await owner.query("insert into core.brands (slug, name, timezone) values ('two-' || gen_random_uuid(), 'Two', 'UTC') returning id::int")).rows[0].id;
       await owner.query(
         `insert into core.channels (brand_id, provider, identifier, bot_key, secret_ref, is_test)
-         values (2, 'waha', 'brand-two', 'javier', 'WAHA_HMAC_BYTOGAM_PRUEBAS', true) on conflict do nothing`,
+         values ($1, 'waha', 'brand-two', 'javier', 'WAHA_HMAC_BYTOGAM_PRUEBAS', true) on conflict do nothing`,
+        [brandTwo],
       );
       const list = (version: number, rate: number, validFrom: string) =>
         owner.query(
           `insert into core.price_lists (brand_id, version, valid_from, is_confirmed, currency, covered_rate, uncovered_rate, discount_pct,
               min_total, home_base_sqft, home_bedroom_sqft, parking_first_car_sqft, parking_extra_car_sqft, sqm_to_sqft, pace_to_ft)
-           values (2, $1, $3, true, 'USD', $2, $2, 0, 150, 1000, 140, 240, 200, 10.76, 2.5) on conflict do nothing`,
-          [version, rate, validFrom],
+           values ($4, $1, $3, true, 'USD', $2, $2, 0, 150, 1000, 140, 240, 200, 10.76, 2.5) on conflict do nothing`,
+          [version, rate, validFrom, brandTwo],
         );
       await list(1, 0.5, "2020-01-01T00:00:00Z");
 
@@ -429,14 +430,15 @@ describe("bot tools", () => {
 
       // The database decides what is in force with its own clock, not the one of the tests.
       const cut = new Date(Date.now() - 60_000).toISOString();
-      await owner.query("update core.price_lists set valid_to = $1 where brand_id = 2 and version = 1", [cut]);
+      await owner.query("update core.price_lists set valid_to = $1 where brand_id = $2 and version = 1", [cut, brandTwo]);
       await list(2, 1, cut);
       const after = (await call(token, "POST", "cotizar", { tipo_cliente: "empresa", pies_cubiertos: 8000 })).json();
       expect(after.total).toBe(8000);
 
       const quotes = (await owner.query(
         `select q.version, q.status, q.total::float from core.quotes q
-         join core.price_lists p on p.id = q.price_list_id where p.brand_id = 2 order by q.version`,
+         join core.price_lists p on p.id = q.price_list_id where p.brand_id = $1 order by q.version`,
+        [brandTwo],
       )).rows;
       expect(quotes).toEqual([
         { version: 1, status: "superseded", total: 4000 },
