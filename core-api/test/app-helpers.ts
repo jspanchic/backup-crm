@@ -108,7 +108,12 @@ export const channelSecret = (): string => process.env.WAHA_HMAC_BYTOGAM_PRUEBAS
 
 /** A fictional number in the NANP 202 area, unique per call. */
 export const fakePhone = (): { digits: string; e164: string } => {
-  const digits = `1202555${randomInt(1000, 9999)}`;
+  // Random exchange as well as line: one run shares one database, and a repeated number is a different test's customer.
+  // (the exchange N11 is not a valid one).
+  let exchange = 0;
+  do exchange = randomInt(200, 1000);
+  while (exchange % 100 === 11);
+  const digits = `1202${exchange}${randomInt(1000, 9999)}`;
   return { digits, e164: `+${digits}` };
 };
 

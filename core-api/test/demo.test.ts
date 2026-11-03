@@ -99,7 +99,13 @@ describe("demo with the scripted bot", () => {
   }, 180_000);
 
   it("never lets the review stop the scripted bot: its replies are all legitimate", async () => {
-    const rejected = await owner.query("select count(*)::int as n from core.reply_reviews where created_at > now() - interval '10 minutes'");
+    // Only the demo channel: other test files write rejected replies to this same database at the same time.
+    const rejected = await owner.query(
+      `select count(*)::int as n from core.reply_reviews r
+         join core.conversations c on c.id = r.conversation_id
+         join core.channels ch on ch.id = c.channel_id
+        where ch.identifier = 'demo' and r.created_at > now() - interval '10 minutes'`,
+    );
     expect(rejected.rows[0].n).toBe(0);
     expect(mock.calls.filter((call) => call.path === "responder" && call.status === 422)).toEqual([]);
   });

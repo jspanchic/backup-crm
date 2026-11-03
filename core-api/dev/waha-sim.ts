@@ -35,8 +35,20 @@ export type Inbound = {
 
 export type Sent = { status: number; body: unknown; id: string };
 
-/** A fictional number in the 202 area code, unique enough for a demo run. */
-export const fakePhone = (): string => `1202555${randomInt(1000, 9999)}`;
+/**
+ * A fictional number, never in the 202 area code: the test helpers draw their numbers from 202, and the
+ * database of a test run is shared, so the two must not be able to meet. Unique within the process.
+ */
+const used = new Set<string>();
+export const fakePhone = (): string => {
+  for (;;) {
+    const phone = `1${[305, 407, 415, 512, 617, 702, 713, 808][randomInt(0, 8)]}555${randomInt(1000, 9999)}`;
+    if (!used.has(phone)) {
+      used.add(phone);
+      return phone;
+    }
+  }
+};
 
 export const newMessageId = (from: string, fromMe = false): string => `${fromMe}_${from}_${randomBytes(16).toString("hex").toUpperCase()}`;
 

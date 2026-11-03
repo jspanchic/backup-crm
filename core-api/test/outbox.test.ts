@@ -48,7 +48,7 @@ describe("outbox", () => {
     expect(call.headers["X-Api-Key"]).toBe("k".repeat(32));
     expect(JSON.parse(call.body)).toEqual({
       session: "bytogam-pruebas",
-      chatId: expect.stringMatching(/^1202555\d{4}@c\.us$/),
+      chatId: expect.stringMatching(/^1202\d{7}@c\.us$/),
       text: "Hola, soy Javier",
     });
     expect(await outbox(id)).toMatchObject({ status: "sent", attempts: 1, last_error: null });

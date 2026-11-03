@@ -530,7 +530,7 @@ describe("bot tools", () => {
       expect(response.statusCode).toBe(200);
       const outbox = (await owner.query("select body from core.outbox where conversation_id = $1", [id])).rows[0].body;
       const history = (await owner.query("select body from core.messages where conversation_id = $1 and direction = 'out'", [id])).rows[0].body;
-      expect(outbox).toMatch(/^Tu celular es \(202\) 555-\d{4}, ¿es correcto\?$/);
+      expect(outbox).toMatch(/^Tu celular es \(202\) \d{3}-\d{4}, ¿es correcto\?$/);
       expect(outbox).toContain(phone.digits.slice(-4));
       expect(history).toBe("Tu celular es {{telefono}}, ¿es correcto?");
 
