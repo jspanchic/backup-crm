@@ -1,0 +1,24 @@
+{
+  "confirmed": false,
+  "template_version": "1",
+  "captions": {
+    "quote": "Le enviamos su cotización {{number}}.",
+    "purchase_order": "Le enviamos la orden de compra {{number}} para que la revise y la confirme.",
+    "work_order": "Le enviamos la orden de trabajo {{number}}."
+  },
+  "legal": {
+    "company_name": "[POR CONFIRMAR] Razón social",
+    "tax_id": "[POR CONFIRMAR] Número de identificación fiscal",
+    "address": "[POR CONFIRMAR] Dirección de la empresa",
+    "phone": "[POR CONFIRMAR] Teléfono",
+    "email": "[POR CONFIRMAR] Correo electrónico",
+    "license": "[POR CONFIRMAR] Licencia o registro",
+    "payment_terms": "[POR CONFIRMAR] Forma y plazo de pago.",
+    "cancellation_policy": "[POR CONFIRMAR] Política de cancelación y reprogramación.",
+    "quote_terms": "[POR CONFIRMAR] Condiciones de la cotización.",
+    "purchase_order_terms": "[POR CONFIRMAR] Condiciones de la orden de compra.",
+    "work_order_terms": "[POR CONFIRMAR] Instrucciones y condiciones de la orden de trabajo.",
+    "customer_signature_label": "Firma del cliente",
+    "company_signature_label": "Por la empresa"
+  }
+}

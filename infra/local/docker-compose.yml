@@ -43,5 +43,22 @@ services:
       PGRST_DB_URI: postgres://authenticator:${AUTHENTICATOR_PASSWORD}@db:5432/salvionix_test
     ports:
       - "127.0.0.1:55301:3000"
+  # Turns the HTML templates of core-api/templates into PDFs. Pinned by tag and digest. In production it sits on
+  # the internal network only, with no route to the internet.
+  gotenberg:
+    image: gotenberg/gotenberg:8.38.1@sha256:aa552cc115db488e0f0bcb07446aac13071ad51505b642c84bb894500907b42b
+    restart: unless-stopped
+    command:
+      - gotenberg
+      - --chromium-disable-javascript=true
+      - --api-timeout=30s
+    mem_limit: 1g
+    ports:
+      - "127.0.0.1:53000:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
 volumes:
   db-data:

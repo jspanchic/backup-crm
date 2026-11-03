@@ -22,6 +22,13 @@ const schema = z.object({
   OUTBOX_PACE_MIN_MS: z.coerce.number().int().min(0).default(2000),
   OUTBOX_PACE_MAX_MS: z.coerce.number().int().min(0).default(5000),
 
+  // Gotenberg turns the HTML templates into PDFs. It is a separate container on the internal network.
+  GOTENBERG_URL: z.url().default("http://127.0.0.1:53000"),
+  // Private folder for the PDFs, outside any web root. Relative paths are resolved from the working directory.
+  DOCUMENTS_DIR: z.string().min(1).default("./.data/documents"),
+  // Where the document templates and settings.json are read from. Unset: the templates folder of this repository.
+  TEMPLATES_DIR: z.string().min(1).optional(),
+
   // Development only. Production authenticates the panel with Cloudflare Access (CRM-T3).
   ADMIN_DEV_SUB: z.uuid().optional(),
   ADMIN_ALLOWED_ORIGINS: z.string().default("http://127.0.0.1:5173,http://localhost:5173"),

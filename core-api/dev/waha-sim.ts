@@ -4,7 +4,7 @@ import { createServer, type Server } from "node:http";
 /**
  * A stand-in for WAHA, for the demo and the tests. It does the two things WAHA does with core-api:
  *  - sends signed webhooks for incoming messages (the envelope of the WAHA documentation), and
- *  - receives POST /api/sendText and keeps what core-api sends out.
+ *  - receives POST /api/sendText and POST /api/sendFile and keeps what core-api sends out.
  * ASSUMPTION until we capture a real delivery: the format of payload.id, the hexadecimal encoding of the
  * signature and the unit of payload.timestamp. It is NOT a copy of real traffic.
  */
@@ -106,7 +106,9 @@ export const sendTwice = async (config: SimConfig, message: Inbound): Promise<[S
   return [first, second];
 };
 
-export type OutboundMessage = { session: string; chatId: string; text: string; at: Date };
+/** A file arrives with its caption in `text`, so the tests read both kinds of message the same way. */
+export type OutboundFile = { filename: string; mimetype: string; bytes: Buffer };
+export type OutboundMessage = { session: string; chatId: string; text: string; at: Date; file?: OutboundFile };
 
 export type WahaServer = {
   url: string;
@@ -128,10 +130,29 @@ export const startWahaServer = async (options: { port: number; apiKey?: string; 
         response.writeHead(status, { "content-type": "application/json" });
         response.end(JSON.stringify(body));
       };
-      if (request.method !== "POST" || request.url !== "/api/sendText") return reply(404, { error: "not found" });
+      if (request.method !== "POST" || (request.url !== "/api/sendText" && request.url !== "/api/sendFile")) return reply(404, { error: "not found" });
       if (options.apiKey && request.headers["x-api-key"] !== options.apiKey) return reply(401, { error: "bad api key" });
       try {
-        const { session, chatId, text } = JSON.parse(Buffer.concat(chunks).toString("utf8")) as { session: string; chatId: string; text: string };
+        const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
+          session: string;
+          chatId: string;
+          text?: string;
+          caption?: string;
+          file?: { mimetype?: string; filename?: string; data?: string };
+        };
+        const { session, chatId, text } = body;
+        if (request.url === "/api/sendFile") {
+          const { file } = body;
+          if (!session || !chatId || !file?.filename || !file.mimetype || !file.data) return reply(422, { error: "invalid body" });
+          sent.push({
+            session,
+            chatId,
+            text: body.caption ?? "",
+            at: new Date(),
+            file: { filename: file.filename, mimetype: file.mimetype, bytes: Buffer.from(file.data, "base64") },
+          });
+          return reply(201, { id: `true_${chatId}_${randomBytes(8).toString("hex").toUpperCase()}` });
+        }
         if (!session || !chatId || typeof text !== "string") return reply(422, { error: "invalid body" });
         sent.push({ session, chatId, text, at: new Date() });
         return reply(201, { id: `true_${chatId}_${randomBytes(8).toString("hex").toUpperCase()}` });

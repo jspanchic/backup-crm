@@ -3,6 +3,7 @@ import { startBackground } from "./background.ts";
 import type { FetchLike } from "./bot.ts";
 import { loadConfig } from "./config.ts";
 import { createDb } from "./db.ts";
+import { gotenbergRenderer } from "./documents/gotenberg.ts";
 
 const config = loadConfig();
 const db = createDb(config);
@@ -14,6 +15,7 @@ const app = buildApp({
   fetch: (url, init) => fetch(url, init),
   outboxFetch: (url, init) => fetch(url, init),
   proxyFetch: (url, init) => fetch(url, init),
+  renderPdf: gotenbergRenderer(config),
   now: () => new Date(),
   logger: { level: config.LOG_LEVEL },
 });

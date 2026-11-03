@@ -1245,3 +1245,33 @@ Por eso **C1.2 y C1.3** (`confirmar` sin hold, y el mensaje de confirmación com
 - **Las ventanas de disponibilidad** se guardan sin tocar las citas existentes por decisión: cambiar el horario no cancela a nadie.
 - **Los documentos** (orden de compra y de trabajo) no se generan todavía (CRM-T14, Entrega 2): cuando existan, cancelar o mover una cita confirmada tendrá que anularlos.
 - **Dispositivos táctiles:** la cuadrícula se desplaza en horizontal en pantallas estrechas; no se probó en teléfono.
+
+## 25. Resultado de CRM-T14b (03/11/2026, `wip/crm-t14b`, sin publicar)
+
+**T14b = el flujo de PDFs completo** para cotización, orden de compra y orden de trabajo, con plantillas provisionales. Los textos legales son `[POR CONFIRMAR]` y **ningún cliente real recibe un PDF** hasta que `confirmed` pase a `true` en `core-api/templates/settings.json`.
+
+| Pieza | Estado |
+|---|---|
+| Gotenberg | `gotenberg/gotenberg:8.38.1` fijado por etiqueta y por digest en `infra/local/docker-compose.yml`, solo en `127.0.0.1:53000`, sin JavaScript en las páginas, 1 GB de memoria, con healthcheck. Lo enciende `npm run local:up` |
+| Numeración | La de CRM-T4 (`COT-`, `OC-`, `OT-`, serie `PRUEBA-` aparte, sin huecos). Nueva `api.issue_document`: **pedir dos veces el mismo documento devuelve el que ya existe**; dos peticiones a la vez emiten uno solo; si el PDF falla, el número no se pierde ni se repite |
+| Almacenamiento | Carpeta privada de `core-api` (`DOCUMENTS_DIR`, por defecto `core-api/.data/documents`, ignorada por git), permisos 0600, archivos **nombrados con su SHA-256** y escritos una sola vez. La base guarda el hash y el tamaño en `core.document_files` (solo inserción). Al leer o enviar se **vuelve a calcular el hash**: un archivo cambiado en el disco se rechaza |
+| Rutas | `POST /admin/documents`, `GET /admin/documents/:id/pdf`, `POST /admin/documents/:id/send` (en `core-api/ROUTES.md`) |
+| Envío | Por la misma cola (`outbox`), con el ritmo y los reintentos de siempre. WAHA `POST /api/sendFile` con el archivo en base64 y el texto como pie. El simulador de WAHA ahora entiende `sendFile` |
+| Plantillas | `core-api/templates/*.html` y `settings.json`: HTML con `{{campo}}`, sin código. Un campo mal escrito **detiene la emisión**. Guía: `docs/PLANTILLAS_PDF.md`. Vista previa con datos inventados: `npm run docs:preview` |
+| Pruebas | 702 en `core-api`, todas pasan; 44 son nuevas (plantillas, almacenamiento, rutas, base y envío). El guion de la demo pasó de 42 a **50 comprobaciones**, con Gotenberg real |
+
+**Cambios respecto a lo propuesto en la sección 14**
+
+- El archivo se llama `<sha256>.pdf`, no `<id>.pdf`: el nombre ya prueba el contenido y no hay que renombrar tras insertar.
+- Un solo interruptor, `confirmed`, en vez de dos: es lo que impide enviar a un cliente real con textos por confirmar.
+
+**Lo que NO está hecho**
+
+- **Emisión automática desde las herramientas del bot** (`cotizar`, `reservar`, `confirmar`): hoy el PDF se emite desde el panel o la ruta. Conectarlo es agregar una llamada a `issueDocument` en cada herramienta; no lo hice porque cambia lo que el bot manda a un cliente.
+- **Enlace público `GET /d/{token}`:** depende de Access (CRM-T3).
+- **Pantalla del panel** con la lista de documentos de la oportunidad.
+- **Plantillas en inglés.**
+- **Rediseño de documentos ya emitidos:** conservan su archivo. Anular (`void`) un documento no tiene ruta todavía.
+- **`sendFile` de WAHA:** el formato (`file.data` en base64, `caption`) sale de su documentación; **no lo probé contra un WAHA real** (SUPUESTO). Falta la versión de producción de WAHA (Joel).
+- **PDFtk en la imagen de Gotenberg (licencia):** sigue pendiente de revisar con un abogado si el producto se entrega empaquetado (sección 14.1).
+- **Los PDF se vieron como imagen** de la misma página (la captura de Chromium de Gotenberg); no los abrí en un lector de PDF.

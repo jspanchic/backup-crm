@@ -1,4 +1,7 @@
-import { createHmac } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { runDemo } from "../dev/demo.ts";
@@ -44,6 +47,8 @@ describe("demo with the scripted bot", () => {
       OUTBOX_PACE_MIN_MS: "0",
       OUTBOX_PACE_MAX_MS: "0",
       LOG_LEVEL: "silent",
+      ADMIN_DEV_SUB: randomUUID(),
+      DOCUMENTS_DIR: mkdtempSync(join(tmpdir(), "salvionix-demo-docs-")),
     });
     const config = loadConfig(env);
     db = createDb(config);
@@ -55,6 +60,7 @@ describe("demo with the scripted bot", () => {
       fetch: http,
       outboxFetch: http,
       proxyFetch: (url, init) => fetch(url, init),
+      renderPdf: async () => Buffer.from("%PDF-1.4 demo"),
       now: () => new Date(),
       logger: false,
     });

@@ -26,6 +26,8 @@ export type TestApp = {
   /** Replace what the fake bot answers: a status, "down" or a function that can wait. */
   botAnswers: { next: (call: Call) => Promise<{ ok: boolean; status: number }> };
   wahaAnswers: { next: (call: Call) => Promise<{ ok: boolean; status: number }> };
+  /** Stands in for Gotenberg: replace `next` to make the engine fail. `html` keeps what it was asked to render. */
+  pdfEngine: { next: (html: string) => Promise<Buffer>; html: string[] };
   clock: { now: Date };
   close: () => Promise<void>;
 };
@@ -52,6 +54,7 @@ export const createTestApp = (overrides: Record<string, string | undefined> = {}
   const wahaCalls: Call[] = [];
   const botAnswers = { next: async (_call: Call) => ({ ok: true, status: 200 }) };
   const wahaAnswers = { next: async (_call: Call) => ({ ok: true, status: 201 }) };
+  const pdfEngine = { next: async (html: string) => Buffer.from(`%PDF-1.4 fake ${html}`), html: [] as string[] };
 
   const record = (calls: Call[], answers: typeof botAnswers): FetchLike => async (url, init) => {
     const call = { url, headers: init.headers, body: init.body };
@@ -69,6 +72,10 @@ export const createTestApp = (overrides: Record<string, string | undefined> = {}
     fetch: botFetch,
     outboxFetch: wahaFetch,
     proxyFetch,
+    renderPdf: async (html) => {
+      pdfEngine.html.push(html);
+      return pdfEngine.next(html);
+    },
     now: () => clock.now,
   });
 
@@ -95,6 +102,7 @@ export const createTestApp = (overrides: Record<string, string | undefined> = {}
     wahaCalls,
     botAnswers,
     wahaAnswers,
+    pdfEngine,
     clock,
     close: async () => {
       await app.idle();

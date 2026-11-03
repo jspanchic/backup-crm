@@ -49,6 +49,7 @@ Las pruebas usan Postgres y PostgREST reales y una base propia (`salvionix_test`
 | Contexto y llamada al bot, con reintento | `src/bot.ts`, `src/token.ts` |
 | Cola de envío con ritmo y reintentos | `src/outbox.ts` |
 | Proxy del panel hacia PostgREST, con lista cerrada | `src/routes/admin-proxy.ts` |
+| PDF de cotización, orden de compra y orden de trabajo (CRM-T14b) | `src/documents/`, `src/routes/admin-documents.ts`, `templates/`. Cómo cambiar las plantillas: [`docs/PLANTILLAS_PDF.md`](../docs/PLANTILLAS_PDF.md). Vista previa: `npm run docs:preview` |
 
 ## Herramientas del bot (CRM-T6)
 

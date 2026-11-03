@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { SignJWT } from "jose";
 import type { AppDeps } from "../app.ts";
 import { adminAgenda } from "./admin-agenda.ts";
+import { adminDocuments } from "./admin-documents.ts";
 
 type Method = "GET" | "POST" | "PATCH" | "DELETE";
 
@@ -61,6 +62,8 @@ export const adminProxy = (app: FastifyInstance, deps: AppDeps): void => {
 
   // The calendar writes through its own routes, not through the proxy: it has no write access to schema core.
   adminAgenda(app, deps, cors);
+  // Documents are numbered and written by core-api too: the panel has no write access to schema core.
+  adminDocuments(app, deps, cors);
 
   app.options("/admin/rest/*", async (request, reply) => {
     cors(request, reply);

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>{{document.type}} {{document.number}}</title>
+<style>
+  @page { size: Letter; margin: 0.7in; }
+  * { box-sizing: border-box; }
+  body { font-family: Helvetica, Arial, sans-serif; font-size: 11pt; line-height: 1.4; color: #1a1a1a; margin: 0; }
+  header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #1a1a1a; padding-bottom: 12pt; margin-bottom: 14pt; }
+  header h1 { font-size: 20pt; margin: 0 0 2pt; }
+  .number { font-size: 14pt; font-weight: bold; text-align: right; }
+  .muted { color: #555; font-size: 9.5pt; }
+  .test { background: #b00020; color: #fff; text-align: center; font-weight: bold; padding: 4pt; margin-bottom: 12pt; }
+  .test:empty { display: none; }
+  h2 { font-size: 11pt; text-transform: uppercase; letter-spacing: 0.04em; margin: 16pt 0 5pt; border-bottom: 1px solid #bbb; padding-bottom: 2pt; }
+  dl { display: grid; grid-template-columns: 38% 62%; gap: 3pt 10pt; margin: 0; }
+  dt { color: #555; }
+  dd { margin: 0; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 4pt 0; border-bottom: 1px solid #ddd; }
+  td:last-child { text-align: right; }
+  tr.total td { font-weight: bold; font-size: 13pt; border-bottom: 2px solid #1a1a1a; }
+  .terms { white-space: pre-line; font-size: 9.5pt; }
+  .note { font-style: italic; color: #8a4b00; }
+  .note:empty { display: none; }
+  .signatures { display: flex; gap: 30pt; margin-top: 46pt; }
+  .signatures div { flex: 1; border-top: 1px solid #1a1a1a; padding-top: 3pt; font-size: 9.5pt; }
+  footer { margin-top: 24pt; font-size: 8.5pt; color: #555; border-top: 1px solid #ddd; padding-top: 6pt; }
+</style>
+</head>
+<body>
+<div class="test">{{document.test_notice}}</div>
+<header>
+  <div>
+    <h1>{{document.type}}</h1>
+    <div>{{legal.company_name}}</div>
+    <div class="muted">{{legal.address}} · {{legal.phone}} · {{legal.email}}</div>
+    <div class="muted">{{legal.tax_id}} · {{legal.license}}</div>
+  </div>
+  <div class="number">
+    {{document.number}}
+    <div class="muted">Emitida el {{document.issued_date}}</div>
+  </div>
+</header>
+<h2>Cliente</h2>
+<dl>
+  <dt>Nombre</dt><dd>{{customer.name}}</dd>
+</dl>
+
+<h2>Trabajo</h2>
+<dl>
+  <dt>Técnico</dt><dd>{{appointment.technician}}</dd>
+  <dt>Fecha</dt><dd>{{appointment.date}}</dd>
+  <dt>Horario</dt><dd>{{appointment.start_time}} a {{appointment.end_time}}</dd>
+  <dt>Dirección</dt><dd>{{service.address}}</dd>
+  <dt>Tipo de espacio</dt><dd>{{service.space_type}}</dd>
+  <dt>Tamaño del espacio</dt><dd>{{service.space_size}}</dd>
+  <dt>Área cubierta</dt><dd>{{quote.covered_area}}</dd>
+  <dt>Área descubierta</dt><dd>{{quote.uncovered_area}}</dd>
+</dl>
+
+<h2>Instrucciones y condiciones</h2>
+<p class="terms">{{legal.work_order_terms}}</p>
+
+<div class="signatures">
+  <div>Técnico: {{appointment.technician}}</div>
+  <div>{{legal.customer_signature_label}}: {{customer.name}}</div>
+</div>
+
+<footer>{{brand.name}} · {{document.type}} {{document.number}}</footer>
+</body>
+</html>

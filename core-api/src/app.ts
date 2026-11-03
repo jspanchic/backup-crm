@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { BotDeps } from "./bot.ts";
 import type { Config } from "./config.ts";
 import type { Db } from "./db.ts";
+import type { RenderPdf } from "./documents/gotenberg.ts";
 import type { OutboxDeps } from "./outbox.ts";
 import { adminProxy } from "./routes/admin-proxy.ts";
 import { toolRoutes } from "./routes/tools.ts";
@@ -15,6 +16,8 @@ export type ProxyFetch = (
 export type AppDeps = BotDeps & {
   outboxFetch: OutboxDeps["fetch"];
   proxyFetch: ProxyFetch;
+  /** HTML in, PDF out. Gotenberg in production; tests and the previews can pass their own. */
+  renderPdf: RenderPdf;
   /** Keeps a promise that runs after the response, so tests and shutdown can wait for it. */
   track: (work: Promise<unknown>) => void;
 };

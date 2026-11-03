@@ -21,7 +21,8 @@
     "typecheck": "tsc --noEmit",
     "start:demo": "node --env-file=../infra/local/.env --env-file=../infra/local/demo.env src/server.ts",
     "sim": "node dev/run-sim.ts",
-    "demo": "node dev/run-demo.ts"
+    "demo": "node dev/run-demo.ts",
+    "docs:preview": "node dev/preview-templates.ts"
   },
   "dependencies": {
     "fastify": "5.12.7",

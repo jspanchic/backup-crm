@@ -15,3 +15,4 @@ dist/
 __screenshots__/
 .vitest/
 .demo/
+core-api/.data/

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type pg from "pg";
 import { fakePhone, sendInbound, sendTwice, type SimConfig, type WahaServer } from "./waha-sim.ts";
 
@@ -202,6 +203,41 @@ export const runDemo = async ({ sim, waha, db, print = console.log }: DemoDeps):
   check(kept?.first_name === "Marta" && kept!.messages >= 2, "Marta sigue en el CRM con su historial: no se perdió nada");
   const pedro = await one(`select first_name from public.contacts where id = $1`, [holders[1].contact]);
   check(pedro?.first_name === "Pedro", "Pedro es un contacto nuevo, sin los datos de Marta");
+
+  // ------------------------------------------------------------------ 9
+  step("9 · Documentos en PDF");
+  const documents = async (path: string, init?: { method: string; body?: unknown }) => {
+    const response = await fetch(`${sim.coreApiUrl}/admin/documents${path}`, {
+      method: init?.method ?? "GET",
+      headers: init?.body ? { "content-type": "application/json" } : undefined,
+      body: init?.body ? JSON.stringify(init.body) : undefined,
+    });
+    const bytes = Buffer.from(await response.arrayBuffer());
+    return { status: response.status, bytes, json: () => JSON.parse(bytes.toString("utf8")) };
+  };
+  const issueDocument = (deal: number, type: string, appointment?: number) =>
+    documents("", { method: "POST", body: { deal_id: deal, document_type: type, appointment_id: appointment } });
+
+  const quoteDocument = await issueDocument(first!.deal, "quote");
+  check(quoteDocument.status === 201 && /^COT-\d{6}$/.test(quoteDocument.json().display_number), `la cotización de Carlos tiene número propio (${quoteDocument.json().display_number ?? quoteDocument.json().error})`);
+  const orderDocument = await issueDocument(first!.deal, "purchase_order", hold!.id);
+  const workDocument = await issueDocument(first!.deal, "work_order", hold!.id);
+  check(/^OC-\d{6}$/.test(orderDocument.json().display_number ?? "") && /^OT-\d{6}$/.test(workDocument.json().display_number ?? ""), "con la cita confirmada salen la orden de compra y la orden de trabajo, cada una con su serie");
+  const pdf = await documents(`/${quoteDocument.json().id}/pdf`);
+  check(pdf.bytes.subarray(0, 5).toString() === "%PDF-" && createHash("sha256").update(pdf.bytes).digest("hex") === quoteDocument.json().file?.sha256, "el PDF guardado es un PDF y su hash coincide con el que registró la base");
+  const repeated = await issueDocument(first!.deal, "quote");
+  check(repeated.status === 200 && repeated.json().id === quoteDocument.json().id, "pedir la cotización otra vez devuelve la misma, sin gastar otro número");
+  const refused = await documents(`/${quoteDocument.json().id}/send`, { method: "POST" });
+  check(refused.status === 409 && refused.json().error === "legal_unconfirmed", "a un cliente real no se le envía nada mientras los textos legales estén por confirmar");
+
+  const testQuote = await issueDocument(testIds!.deal, "quote");
+  check(/^PRUEBA-COT-\d{6}$/.test(testQuote.json().display_number ?? ""), "el cliente de prueba usa la serie de prueba: no deja huecos en la numeración real");
+  const beforeFile = waha.to(tester.phone).length;
+  const queued = await documents(`/${testQuote.json().id}/send`, { method: "POST" });
+  const delivered = (await waha.waitFor(tester.phone, beforeFile + 1)).at(-1);
+  check(queued.status === 202 && delivered?.file?.filename === `${testQuote.json().display_number}.pdf` && delivered.file.mimetype === "application/pdf", "al cliente de prueba le llega el PDF por WhatsApp, con el nombre de su número");
+  check(delivered?.file ? createHash("sha256").update(delivered.file.bytes).digest("hex") === testQuote.json().file.sha256 : false, "y el archivo recibido es exactamente el guardado");
+  print(`   📄 ${[quoteDocument, orderDocument, workDocument, testQuote].map((d) => d.json().display_number).join(" · ")}`);
 
   // ------------------------------------------------------------------ extra
   step("Extra · Mensajes que no deben pasar");

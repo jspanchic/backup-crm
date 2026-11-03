@@ -29,7 +29,7 @@ const TIME_OFF = z.strictObject({ from: instant, to: instant, reason: z.string()
 const PARAM = z.strictObject({ id });
 
 /** The database refuses with an error code and a hint; the panel gets both, never the SQL. */
-const refusal = (error: unknown): { status: number; body: { error: string; reason?: string } } | null => {
+export const refusal = (error: unknown): { status: number; body: { error: string; reason?: string } } | null => {
   const { code, hint } = error as { code?: string; hint?: string };
   const reason = hint || undefined;
   if (code === "CX004") return { status: 400, body: { error: "invalid_input", reason } };
