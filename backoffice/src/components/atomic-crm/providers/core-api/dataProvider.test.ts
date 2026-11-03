@@ -99,22 +99,70 @@ describe("core-api data provider", () => {
   });
 
   it("reads the configuration row and the global search through the same door", async () => {
-    answer = (url) =>
-      url.includes("rpc/global_search")
-        ? json([{ resource: "contacts", record_id: 1 }])
-        : json({ id: 1, config: { title: "x" } });
+    answer = (url) => {
+      if (url.includes("rpc/global_search"))
+        return json([{ resource: "contacts", record_id: 1 }]);
+      if (url.includes("/configuration"))
+        return json({ id: 1, config: { title: "x" } });
+      return json([]);
+    };
     const provider = getDataProvider();
     expect(await provider.getConfiguration()).toEqual({ title: "x" });
     expect(await provider.globalSearch("ana", ["contacts"], 5)).toEqual([
       { resource: "contacts", record_id: 1 },
     ]);
-    expect(
-      calls.map((call) => call.url.replace("http://127.0.0.1:3000", "")),
-    ).toEqual([
-      "/admin/rest/configuration?id=eq.1",
+    const paths = calls.map(
+      (call) => call.url.replace("http://127.0.0.1:3000", "").split("?")[0],
+    );
+    expect(paths.slice(0, 2)).toEqual([
+      "/admin/rest/configuration",
       "/admin/rest/rpc/global_search",
     ]);
     expect(calls[1].init.method).toBe("POST");
+  });
+
+  describe("global search and test leads", () => {
+    const results = [
+      { resource: "contacts", record_id: 1, contact_id: 1, deal_id: null },
+      { resource: "contacts", record_id: 2, contact_id: 2, deal_id: null },
+      { resource: "deals", record_id: 7, contact_id: 2, deal_id: 7 },
+      { resource: "tasks", record_id: 9, contact_id: 2, deal_id: 7 },
+      { resource: "deals", record_id: 8, contact_id: 1, deal_id: 8 },
+    ];
+    const answerWithTestLeads = (url: string) => {
+      if (url.includes("rpc/global_search")) return json(results);
+      if (url.includes("/contacts_summary?")) return json([{ id: 2 }]);
+      if (url.includes("/deals?")) return json([{ id: 7 }]);
+      return json([]);
+    };
+
+    it("leaves out the contacts, deals and tasks of a test lead", async () => {
+      answer = answerWithTestLeads;
+
+      const found = await getDataProvider().globalSearch(
+        "prueba",
+        ["contacts", "deals", "tasks"],
+        10,
+      );
+
+      expect(
+        found.map((entry) => `${entry.resource}:${entry.record_id}`),
+      ).toEqual(["contacts:1", "deals:8"]);
+    });
+
+    it("shows them when the user asked to see test leads, without asking which ones they are", async () => {
+      answer = answerWithTestLeads;
+      setShowTestLeads(true);
+
+      const found = await getDataProvider().globalSearch(
+        "prueba",
+        ["contacts", "deals", "tasks"],
+        10,
+      );
+
+      expect(found).toHaveLength(results.length);
+      expect(calls).toHaveLength(1);
+    });
   });
 
   it("never writes appointments from the panel", async () => {

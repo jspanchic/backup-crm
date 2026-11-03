@@ -33,7 +33,7 @@ export const DealEmpty = ({ children }: { children?: ReactNode }) => {
       }}
     >
       <img
-        src="./img/empty.svg"
+        src={`${import.meta.env.BASE_URL}img/empty.svg`}
         alt={translate("resources.deals.empty.title")}
       />
       {contacts && contacts.length > 0 ? (

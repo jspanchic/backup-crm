@@ -11,6 +11,7 @@ WhatsApp real y el bot Javier es de guion (sin Claude). Los clientes y sus mensa
 | Empezar de cero | Desde una terminal en la raíz: `INICIAR-DEMO.cmd limpio`. Borra los datos locales y vuelve a cargar solo los de ejemplo. Úsalo la primera vez, o cuando la lista esté llena de corridas anteriores |
 | Apagar todo | Doble clic en **`DETENER-DEMO.cmd`**. Apaga el panel, `core-api` y la base. Los datos quedan guardados para la próxima. Docker Desktop sigue abierto: ciérralo desde su icono si quieres liberar memoria |
 | Si algo falla | Los registros están en la carpeta `.demo` (`core-api.log`, `panel.log` y sus `.err.log`) |
+| "Failed to fetch" y las imágenes rotas | Los servicios están apagados y la pestaña se quedó abierta. Doble clic en `INICIAR-DEMO.cmd` y recarga con `F5` |
 
 Lo que se enciende: la base de datos y PostgREST (Docker), `core-api` en el puerto 3000 y el panel en el 5173. Todo en `127.0.0.1`:
 nadie más en tu red puede entrar.
@@ -27,7 +28,10 @@ cambian según el día y la hora en que lo corras: siempre cuenta con "el primer
 
 - **Qué hacer:** `INICIAR-DEMO.cmd limpio` y espera a que se abra el navegador.
 - **Qué debes ver:** una barra superior con **Panel principal, Contactos, Empresas, Oportunidades, Citas**, un buscador
-  (`Ctrl K`) y tu avatar. El Panel principal muestra la tarjeta "¿Qué sigue?" de arranque: no hace falta seguirla.
+  (`Ctrl K`) y tu avatar. El Panel principal muestra **Contactos prioritarios, Importes de oportunidades, Actividad reciente
+  y Próximas tareas** con los datos de ejemplo.
+- **Busca con `Ctrl K`:** escribe "Carlos" y salen los contactos con ese nombre. "Prueba" no devuelve nada: los clientes de prueba
+  están ocultos (paso 12).
 - **Si ves una pantalla en blanco:** espera 5 segundos y recarga con `F5`. Si sigue, mira `.demo\panel.err.log`.
 
 ### 2. Llenar el CRM con la demo

@@ -1,5 +1,6 @@
 import { useGetList } from "ra-core";
 
+import { isCoreApiProvider } from "../providers/core-api";
 import type { Contact, ContactNote } from "../types";
 import { DashboardActivityLog } from "./DashboardActivityLog";
 import { DashboardStepper } from "./DashboardStepper";
@@ -39,7 +40,8 @@ export const Dashboard = () => {
     return <DashboardStepper step={1} />;
   }
 
-  if (!totalContactNotes) {
+  // With core-api the conversation replaces notes: waiting for a first note would hide the dashboard for good.
+  if (!totalContactNotes && !isCoreApiProvider()) {
     return <DashboardStepper step={2} contactId={dataContact?.[0]?.id} />;
   }
 

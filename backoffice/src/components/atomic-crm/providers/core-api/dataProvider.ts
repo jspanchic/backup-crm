@@ -14,7 +14,7 @@ import type { Deal, SearchResourceName, SearchResult } from "../../types";
 import type { CrmDataProvider } from "../supabase/dataProvider";
 import { searchDealCategories } from "../supabase/searchDealCategories";
 import { getCoreApiUrl, httpClient } from "./httpClient";
-import { excludeTestLeads } from "./testLeads";
+import { excludeTestLeads, getShowTestLeads } from "./testLeads";
 
 // Thin data provider over core-api. Every call goes to /admin/rest/*, which core-api forwards to
 // PostgREST with its own token and a closed list of resources. Nothing here imports Supabase.
@@ -114,7 +114,31 @@ const getDataProviderWithCustomMethods = () => {
         headers: new Headers({ "Content-Type": "application/json" }),
         body: JSON.stringify({ query, resources, max_results: maxResults }),
       });
-      return json ?? [];
+      const results: SearchResult[] = json ?? [];
+      if (getShowTestLeads() || results.length === 0) return results;
+      // The search function knows nothing about test leads: drop what belongs to one, like the lists do.
+      const [contacts, deals] = await Promise.all(
+        ["contacts_summary", "deals"].map((name) =>
+          base.getList(name, {
+            filter: { is_test: true },
+            pagination: { page: 1, perPage: 1000 },
+            sort: { field: "id", order: "ASC" },
+          }),
+        ),
+      );
+      const testContacts = new Set(contacts.data.map((row) => Number(row.id)));
+      const testDeals = new Set(deals.data.map((row) => Number(row.id)));
+      return results.filter((result) => {
+        if (result.resource === "contacts")
+          return !testContacts.has(Number(result.record_id));
+        if (result.resource === "deals")
+          return !testDeals.has(Number(result.record_id));
+        return !(
+          (result.contact_id != null &&
+            testContacts.has(Number(result.contact_id))) ||
+          (result.deal_id != null && testDeals.has(Number(result.deal_id)))
+        );
+      });
     },
     async getConfiguration(): Promise<ConfigurationContextValue> {
       const { data } = await base.getOne("configuration", { id: 1 });
@@ -143,7 +167,8 @@ const applyFullTextSearch = (columns: string[]) => (params: GetListParams) => {
       "@or": columns.reduce(
         (acc, column) => ({
           ...acc,
-          [`${column === "email" ? "email_fts" : column === "phone" ? "phone_fts" : column}@ilike`]: q,
+          [`${column === "email" ? "email_fts" : column === "phone" ? "phone_fts" : column}@ilike`]:
+            q,
         }),
         {},
       ),

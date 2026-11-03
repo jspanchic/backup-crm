@@ -92,20 +92,29 @@ Step 'Cargando datos base' { & $npm run --silent db:seed }
 Step 'Cargando datos de demostracion (ficticios)' { & $npm run --silent db:seed-demo }
 
 # 3. core-api and the panel, as background processes with their own logs
-function Start-Background([string]$name, [string]$dir, [string[]]$arguments, [int]$port) {
+# The process is created through WMI, not Start-Process: Start-Process makes the child inherit the pipe that
+# carries this script's output, so anything that reads that output (a pipeline, a log capture) would wait for
+# the servers to exit. WMI starts it detached, with no inherited handles. Its environment is not ours, so
+# PATH and the variables it needs go into the command line.
+function Start-Background([string]$name, [string]$dir, [string[]]$arguments, [int]$port, [hashtable]$variables = @{}) {
   if (Test-Port $port) { Say "$name ya estaba encendido (puerto $port)."; return }
-  $process = Start-Process -FilePath (Join-Path $nodeDir 'node.exe') -ArgumentList $arguments -WorkingDirectory $dir `
-    -WindowStyle Hidden -PassThru `
-    -RedirectStandardOutput (Join-Path $state "$name.log") -RedirectStandardError (Join-Path $state "$name.err.log")
-  Set-Content -Path (Join-Path $state "$name.pid") -Value $process.Id
-  Say "$name encendido (proceso $($process.Id))."
+  $set = ($variables.GetEnumerator() | ForEach-Object { "set `"$($_.Key)=$($_.Value)`" && " }) -join ''
+  $log = Join-Path $state "$name.log"
+  $errorLog = Join-Path $state "$name.err.log"
+  $inner = "set `"PATH=$nodeDir;%PATH%`" && $set`"$nodeDir\node.exe`" $($arguments -join ' ') > `"$log`" 2> `"$errorLog`""
+  $created = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
+    CommandLine      = "cmd.exe /d /s /c `"$inner`""
+    CurrentDirectory = $dir
+  }
+  if ($created.ReturnValue -ne 0) { throw "No se pudo encender $name (codigo $($created.ReturnValue))." }
+  Set-Content -Path (Join-Path $state "$name.pid") -Value $created.ProcessId
+  Say "$name encendido (proceso $($created.ProcessId))."
 }
 
 Start-Background 'core-api' $core @('--env-file=../infra/local/.env', '--env-file=../infra/local/demo.env', 'src/server.ts') 3000
 Wait-Until 'que core-api responda' 60 { Test-Url $apiUrl }
 
-$env:VITE_DATA_PROVIDER = 'core-api'
-Start-Background 'panel' (Join-Path $root 'backoffice') @('node_modules/vite/bin/vite.js', '--force', '--host', '127.0.0.1', '--port', '5173', '--strictPort') 5173
+Start-Background 'panel' (Join-Path $root 'backoffice') @('node_modules/vite/bin/vite.js', '--force', '--host', '127.0.0.1', '--port', '5173', '--strictPort') 5173 @{ VITE_DATA_PROVIDER = 'core-api' }
 Wait-Until 'que el panel responda' 120 { Test-Url $panelUrl }
 
 Say 'Todo listo. Abriendo el panel en el navegador.'

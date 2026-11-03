@@ -24,7 +24,7 @@ export const ContactEmpty = () => {
         }}
       >
         <img
-          src="./img/empty.svg"
+          src={`${import.meta.env.BASE_URL}img/empty.svg`}
           alt={translate("resources.contacts.empty.title")}
         />
         <div className="flex flex-col gap-0 items-center">

@@ -15,7 +15,7 @@ export const CompanyEmpty = () => {
       }}
     >
       <img
-        src="./img/empty.svg"
+        src={`${import.meta.env.BASE_URL}img/empty.svg`}
         alt={translate("resources.companies.empty.title", {
           _: "No companies found",
         })}
