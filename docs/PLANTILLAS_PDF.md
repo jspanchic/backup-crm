@@ -126,4 +126,4 @@ Para probar una carpeta de plantillas fuera del repositorio: variable `TEMPLATES
 - **Plantillas en inglés:** hoy son solo en español. Para tener las dos, se duplica cada archivo y se elige por idioma del cliente (hay que pedirlo).
 - **Volver a generar un PDF ya emitido:** el documento emitido conserva el archivo con el que salió. Un rediseño solo aplica a los documentos nuevos.
 - **Enlace público `GET /d/{token}`:** depende de Access (CRM-T3). Hoy el PDF se baja desde el panel y se envía por WhatsApp.
-- **Botones en el panel:** las rutas existen (`core-api/ROUTES.md`); falta la lista de documentos de la oportunidad en la pantalla.
+- **Quién emite solo:** el bot emite y envía la cotización (al cotizar) y la orden de compra (al confirmar); la orden de trabajo solo se emite. A un cliente real, nada de eso ocurre mientras `confirmed` sea `false`. Desde el panel (ficha de la oportunidad, sección Documentos) se puede generar, descargar y enviar a mano.

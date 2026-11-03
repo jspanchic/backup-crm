@@ -19,7 +19,7 @@ nadie más en tu red puede entrar.
 **No hay pantalla de usuario y contraseña.** El panel entra como el responsable de ejemplo (Sebastián). El acceso real con
 Cloudflare Access es otra tarea.
 
-## Los 12 pasos
+## Los 13 pasos
 
 Los pasos van en orden: el 2 llena el CRM con clientes y conversaciones, y los demás los recorren. Las horas de las citas
 cambian según el día y la hora en que lo corras: siempre cuenta con "el primer horario libre", no con una hora fija.
@@ -39,7 +39,7 @@ cambian según el día y la hora en que lo corras: siempre cuenta con "el primer
 - **Qué hacer:** abre una terminal (PowerShell) y corre `npm run demo`. Los comandos exactos están en la sección
   [Cómo correr `npm run demo`](#cómo-correr-npm-run-demo-y-cómo-leer-su-resultado). Cuando termine, vuelve al navegador y
   recarga con `F5`.
-- **Qué debes ver en la terminal:** ocho escenas narradas y, al final, `✅ 42 de 42 comprobaciones correctas`.
+- **Qué debes ver en la terminal:** nueve escenas narradas y, al final, `✅ 56 de 56 comprobaciones correctas`.
 
 ### 3. La lista de contactos
 
@@ -138,6 +138,19 @@ cambian según el día y la hora en que lo corras: siempre cuenta con "el primer
 - **Por qué importa:** cualquiera que se llame "Prueba …" queda marcado como prueba y **no cuenta** en reportes, tablero ni
   disponibilidad. La cita de un cliente de prueba no bloquea el horario de uno real.
 
+### 13. Documentos en PDF
+
+- **Qué hacer:** con **Mostrar clientes de prueba** activado (paso 12), abre una oportunidad de *Prueba Sebas* que haya llegado a **Servicio contratado**
+  (Oportunidades, o la ficha del contacto) y baja hasta **Documentos**. Si todavía no corriste `npm run demo`, no habrá ninguna.
+- **Qué debes ver:** tres documentos con su número: la cotización (`PRUEBA-COT-…`), la orden de compra (`PRUEBA-OC-…`) y la orden de trabajo (`PRUEBA-OT-…`),
+  los tres con la marca **Prueba**. La cotización y la orden de compra dicen **Enviado** (la demo se las mandó sola, desde el bot); la orden de trabajo dice
+  *"Es para el técnico: no se envía al cliente"* y no tiene botón de envío. Cada uno tiene **Descargar** (baja el PDF) y los enviados, **Enviar otra vez**.
+- **El candado:** abre ahora la oportunidad de **Carlos Pérez** (cliente real, ocultando otra vez los de prueba). Sus documentos (`COT-`, `OC-`, `OT-`) se pueden
+  **Descargar**, pero **Enviar** está apagado y abajo dice que los clientes reales no reciben documentos hasta confirmar los textos legales.
+  Es a propósito: las plantillas todavía dicen `[POR CONFIRMAR]`. Para abrirlo: `docs/PLANTILLAS_PDF.md`, sección "Cuándo un cliente real puede recibir un PDF".
+- **Botones de generar:** aparecen solo los documentos que se pueden emitir en ese momento (por ejemplo, la orden de compra cuando hay una cita reservada).
+  Si un PDF falló, el documento sale con **Sin PDF todavía** y un botón **Generar PDF**.
+
 ## Cómo correr `npm run demo` y cómo leer su resultado
 
 `npm run demo` es el guion automático: simula a los clientes escribiendo por WhatsApp, deja que el bot de guion conteste y
@@ -165,7 +178,7 @@ clientes nuevos en el panel (otro *Carlos Pérez*…): para volver a una lista l
 | `🤖 Javier: …` | Lo que contesta el bot (lo que WAHA enviaría por WhatsApp) |
 | `✅ …` | Una **comprobación** que pasó: se miró la base y es cierto |
 | `❌ …` | Una comprobación que **falló**. Esa línea dice qué se esperaba |
-| `✅ 42 de 42 comprobaciones correctas` | Todo bien. Si dice por ejemplo `40 de 42`, hay dos `❌` más arriba |
+| `✅ 56 de 56 comprobaciones correctas` | Todo bien. Si dice por ejemplo `54 de 56`, hay dos `❌` más arriba |
 | Código de salida | `0` si todo pasó, `1` si falló alguna comprobación, `2` si no pudo arrancar (ver abajo). En PowerShell: `$LASTEXITCODE` |
 
 Qué muestra cada escena, para buscarlo luego en el panel:

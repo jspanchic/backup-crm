@@ -236,6 +236,46 @@ export const spanishCrmMessages: CrmMessages = {
         "La primera vez que la marques como contratada se crea una tarea de seguimiento para hoy. Puedes reprogramarla.",
       followup_save_error:
         "No se pudo actualizar la oportunidad. Revisa el contacto e inténtalo de nuevo.",
+      documents: {
+        title: "Documentos",
+        empty: "Todavía no hay documentos.",
+        types: {
+          quote: "Cotización",
+          purchase_order: "Orden de compra",
+          work_order: "Orden de trabajo",
+        },
+        test: "Prueba",
+        sent: "Enviado",
+        queued: "En cola de envío",
+        send_failed: "Falló el envío",
+        not_sent: "Sin enviar",
+        no_file: "Sin PDF todavía",
+        generate: "Generar %{type}",
+        generate_pdf: "Generar PDF",
+        download: "Descargar",
+        send: "Enviar",
+        send_again: "Enviar otra vez",
+        locked:
+          "Los clientes reales no reciben documentos hasta que se confirmen los textos legales.",
+        locked_hint: "Bloqueado hasta confirmar los textos legales",
+        for_technician: "Es para el técnico: no se envía al cliente.",
+        generated: "%{number} está listo",
+        queued_notice: "%{number} quedó en cola para enviarse",
+        errors: {
+          unknown: "Algo salió mal. Inténtalo de nuevo.",
+          pdf_engine_unavailable:
+            "El motor de PDF no está disponible. Inténtalo en un momento.",
+          legal_unconfirmed:
+            "Los clientes reales no reciben documentos hasta que se confirmen los textos legales.",
+          no_conversation: "El cliente no tiene una conversación abierta para enviárselo.",
+          no_appointment: "Esta oportunidad no tiene una cita para ese documento.",
+          no_quote: "Esta oportunidad todavía no tiene cotización.",
+          invalid_state: "Ese documento no se puede emitir en el estado actual.",
+          template_invalid: "La plantilla tiene un error. No se emitió el documento.",
+          stored_file_invalid: "El archivo guardado está dañado. No se abrió.",
+          no_file: "Este documento todavía no tiene PDF.",
+        },
+      },
     },
     notes: {
       name: "Nota |||| Notas",

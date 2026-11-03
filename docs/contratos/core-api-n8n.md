@@ -106,15 +106,31 @@ Todas con `Authorization: Bearer <token>`, **cuerpo JSON de máximo 16 KB y esqu
 |---|---|---|
 | `GET /tools/ficha` | Nada (ni query) | `nombre`, `apellido`, `email`, `idioma`, `telefono_enmascarado`, `etapa`, `tipo_cliente`, `tipo_espacio`, `direccion`, `tamano`, `zip`, `cotizacion_vigente`, `cita` |
 | `POST /tools/guardar_datos` | Al menos uno de: `nombre`, `apellido`, `email`, `idioma` (`es`\|`en`), `tipo_cliente` (`hogar`\|`empresa`), `tipo_espacio`, `direccion`, `tamano`, `zip` | `{guardado: [...]}`. Con nombre y tipo de cliente, la oportunidad pasa a `contacted` |
-| `POST /tools/cotizar` | `tipo_cliente`; hogar: `dormitorios`, `autos_techados`, `autos_descubiertos`; empresa: `pies_cubiertos`; ambos: `areas_extra[]` con `techada` (obligatorio, nunca se asume) y `pies`, `metros` o `pasos_largo`+`pasos_ancho` | `version`, `subtotal`, `descuento`, `total`, `minimo_aplicado`, `pies_cubiertos`, `pies_descubiertos`, `moneda`, `descuento_pct`, `precios_confirmados`. **No acepta montos** |
+| `POST /tools/cotizar` | `tipo_cliente`; hogar: `dormitorios`, `autos_techados`, `autos_descubiertos`; empresa: `pies_cubiertos`; ambos: `areas_extra[]` con `techada` (obligatorio, nunca se asume) y `pies`, `metros` o `pasos_largo`+`pasos_ancho` | `version`, `subtotal`, `descuento`, `total`, `minimo_aplicado`, `pies_cubiertos`, `pies_descubiertos`, `moneda`, `descuento_pct`, `precios_confirmados`. **No acepta montos**. Además `pdf` (`en_cola` o `no_disponible`) y `aviso_pdf`: `core-api` emite la cotización en PDF y la pone en cola para enviarse por WhatsApp. **Solo di que va el PDF si `pdf` es `en_cola`** (ver "Documentos en PDF") |
 | `POST /tools/escalar` | `motivo` (1 a 300) | `{pausado, ya_estaba_pausado}`. Pausa el bot y crea una tarea de seguimiento |
 | `POST /tools/horarios_libres` | `desde` (fecha, opcional), `dias` (1 a 14, opcional). Cuerpo vacío = próximos 7 días | `zona_horaria` y hasta 12 `horarios` con `inicio`, `fin` y `texto` ya escrito en el idioma del cliente. **Solo estos horarios se pueden reservar o mencionar** |
 | `POST /tools/reservar` | `inicio` (fecha y hora con zona, tal cual la devolvió `horarios_libres`) | `inicio`, `fin`, `vence_en` (15 min). `409 slot_not_offered` si no salió de `horarios_libres`; `409 slot_taken` si ya no está libre |
-| `POST /tools/confirmar` | Nada (`{}` o vacío) | `{confirmado, inicio, fin, mensaje_enviado}`. Exige hold vigente (`409 hold_expired` si venció), dirección y cotización. **El mensaje de confirmación lo escribe `core-api` y ya se envió: el bot no debe escribir otro** |
+| `POST /tools/confirmar` | Nada (`{}` o vacío) | `{confirmado, inicio, fin, mensaje_enviado}`. Exige hold vigente (`409 hold_expired` si venció), dirección y cotización. **El mensaje de confirmación lo escribe `core-api` y ya se envió: el bot no debe escribir otro**. Además `pdf` y `aviso_pdf`, como en `cotizar`, para la orden de compra |
 | `POST /tools/responder` | `texto` (1 a 4000) | `{encolado, id}` o `422` |
 
 **Marca del teléfono.** Si el bot necesita repetirle al cliente su celular, escribe `{{telefono}}`: `core-api` pone el número solo en el mensaje que sale. El historial que vuelve a n8n conserva la marca, así que el número completo no pasa nunca por el bot.
 
+
+**Documentos en PDF (CRM-T14c).** El bot **no genera ni envía PDF**: no hay herramienta para eso. `core-api` lo hace solo, dentro de `cotizar` y `confirmar`, y le cuenta al bot qué pasó en `pdf` y `aviso_pdf`.
+
+| Momento | Qué hace `core-api` | Al cliente | Al técnico |
+|---|---|---|---|
+| `cotizar` | Emite la cotización (numerada `COT-`) y su PDF | Se la envía por WhatsApp, con una frase corta | |
+| `confirmar` | Emite la orden de compra (`OC-`) y la orden de trabajo (`OT-`) | Solo la orden de compra | La orden de trabajo queda emitida y guardada; no se envía a nadie |
+
+Reglas para el bot:
+
+- `pdf: "en_cola"` = el PDF quedó en cola de envío. Puede decirlo ("te envié la cotización en PDF"), **sin prometer a qué hora llega**.
+- `pdf: "no_disponible"` = **no se envió ningún PDF**: no lo menciones ni lo prometas. Es lo que pasa también cuando el motor de PDF falla: la cotización o la cita **no se pierden**; alguien del equipo puede emitir el documento desde el panel.
+- **Candado legal:** mientras los textos legales estén `[POR CONFIRMAR]` (`confirmed: false` en `core-api/templates/settings.json`), a un **cliente real** no se le emite ni se le envía nada solo, y `pdf` es siempre `no_disponible`. Los clientes de prueba (`Prueba …`) sí reciben los PDF. Sin cambios en el bot cuando el candado se abra: el mismo campo pasa a `en_cola`.
+- Una nueva cotización (otra llamada a `cotizar`) emite y envía otra cotización.
+- El PDF y su frase no pasan por `responder`: no se revisan con las reglas de arriba y no cuentan como respuesta del bot, pero quedan en el historial de la conversación como mensajes del bot.
+- **n8n no necesita cambios de flujo:** solo leer `pdf` y `aviso_pdf` de la respuesta de las dos herramientas.
 **Qué revisa `responder` antes de encolar** (código `reason`):
 
 | `reason` | Se detiene cuando |

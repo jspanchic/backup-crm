@@ -257,6 +257,46 @@ export const englishCrmMessages = {
         "The first time this opportunity is marked as won, a follow-up task is created for today. You can reschedule it.",
       followup_save_error:
         "Could not update this opportunity. Check the contact and try again.",
+      documents: {
+        title: "Documents",
+        empty: "No documents yet.",
+        types: {
+          quote: "Quote",
+          purchase_order: "Purchase order",
+          work_order: "Work order",
+        },
+        test: "Test",
+        sent: "Sent",
+        queued: "Queued to send",
+        send_failed: "Send failed",
+        not_sent: "Not sent",
+        no_file: "No PDF yet",
+        generate: "Generate %{type}",
+        generate_pdf: "Generate PDF",
+        download: "Download",
+        send: "Send",
+        send_again: "Send again",
+        locked:
+          "Real customers do not receive documents until the legal texts are confirmed.",
+        locked_hint: "Locked until the legal texts are confirmed",
+        for_technician: "For the technician: it is not sent to the customer.",
+        generated: "%{number} is ready",
+        queued_notice: "%{number} queued for sending",
+        errors: {
+          unknown: "Something went wrong. Try again.",
+          pdf_engine_unavailable:
+            "The PDF engine is not available. Try again in a moment.",
+          legal_unconfirmed:
+            "Real customers do not receive documents until the legal texts are confirmed.",
+          no_conversation: "The customer has no open conversation to send it to.",
+          no_appointment: "This opportunity has no appointment for that document.",
+          no_quote: "This opportunity has no quote yet.",
+          invalid_state: "That document cannot be issued in the current state.",
+          template_invalid: "The template has an error. The document was not issued.",
+          stored_file_invalid: "The stored file is damaged. It was not opened.",
+          no_file: "This document has no PDF yet.",
+        },
+      },
     },
     notes: {
       name: "Note |||| Notes",

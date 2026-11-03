@@ -1275,3 +1275,29 @@ Por eso **C1.2 y C1.3** (`confirmar` sin hold, y el mensaje de confirmación com
 - **`sendFile` de WAHA:** el formato (`file.data` en base64, `caption`) sale de su documentación; **no lo probé contra un WAHA real** (SUPUESTO). Falta la versión de producción de WAHA (Joel).
 - **PDFtk en la imagen de Gotenberg (licencia):** sigue pendiente de revisar con un abogado si el producto se entrega empaquetado (sección 14.1).
 - **Los PDF se vieron como imagen** de la misma página (la captura de Chromium de Gotenberg); no los abrí en un lector de PDF.
+
+## 27. Resultado de CRM-T14c (03/11/2026, `wip/crm-t14c`, sin publicar)
+
+**T14c = los PDF dentro del flujo del bot y de la ficha de la oportunidad.** Las plantillas no se tocaron (las diseña Sebastián). El candado `confirmed: false` sigue puesto.
+
+| Pieza | Estado |
+|---|---|
+| `cotizar` | Después de calcular la cotización, `core-api` **emite la cotización en PDF y la pone en cola** para el cliente (`src/documents/automatic.ts`). La respuesta de la herramienta trae `pdf` (`en_cola` o `no_disponible`) y `aviso_pdf`, para que el bot solo diga lo que es cierto. Una nueva cotización emite y envía otra |
+| `confirmar` | Después de confirmar la cita: **orden de compra** emitida y puesta en cola para el cliente; **orden de trabajo** emitida y guardada para el técnico, **sin enviarla a nadie** |
+| El candado | A un **cliente real** no se le emite ni se le envía nada solo mientras `confirmed` sea `false`. Decisión: tampoco se **emite**, para que la serie numerada real no tenga borradores ni huecos. Los clientes de prueba reciben todo |
+| Si el PDF falla | La cotización o la confirmación **no se pierden**: el error queda en el registro (solo nombre y código) y la herramienta responde `no_disponible`. El panel puede emitir el documento a mano |
+| Mensajes | Los PDF automáticos salen como mensajes **del bot** en el historial; los del panel, de una persona. (`api.enqueue_document` ahora recibe el remitente) |
+| Panel | En la ficha de la oportunidad, sección **Documentos** (solo con `core-api`): lista con número, tipo, fecha, marca de prueba y estado de envío; **Descargar**, **Enviar / Enviar otra vez**, y **Generar** para lo que se puede emitir ahora (o **Generar PDF** si un archivo falló). **Enviar** queda apagado, con la razón, para un documento real mientras el candado esté puesto. La orden de trabajo no tiene botón de envío |
+| Rutas | Nueva `GET /admin/documents?deal_id=N` (lista, qué se puede emitir y si el candado está puesto). `POST /admin/documents` ahora encuentra sola la cita viva de la oportunidad para una orden (migración `0017_documents_in_flows.sql`) |
+| Contrato con n8n | `docs/contratos/core-api-n8n.md`: `pdf` y `aviso_pdf` en las respuestas de `cotizar` y `confirmar`, y la sección "Documentos en PDF". n8n no necesita cambios de flujo |
+| Demo | Escena 9 reescrita: a Carlos (real) no le sale nada solo; al cliente de prueba le llega la cotización al cotizar y la orden de compra al confirmar; la orden de trabajo queda emitida y sin enviar; reenvío desde el panel; el listado. **56 de 56** con Gotenberg real. Paso 13 en `docs/GUIA_VISUAL.md` |
+| Pruebas | `core-api`: 710 de 710 (8 nuevas del flujo del bot, y se ajustaron 3 que suponían que un cliente de prueba no tenía documento al cotizar). Panel: 10 nuevas en `DealDocuments.test.tsx`; en una corrida completa pasaron 383, salvo 2 de avatares que necesitan internet; en otra, con la máquina cargada, fallaron además pruebas que usan módulos simulados ("chromium request interception"), un fallo del entorno de pruebas que no repitió. Quité a propósito el candado del panel y la prueba falló como debía |
+| Visto en el navegador | La ficha de una oportunidad de prueba muestra los tres documentos y la de Carlos tiene **Enviar** apagado; **Enviar otra vez** respondió 202 y **Descargar** 200 |
+
+**Para decidir o revisar**
+
+- **La frase de la orden de compra** (`captions.purchase_order` en `settings.json`, una plantilla que no toqué) dice *"para que la revise y la confirme"*. Ahora la orden llega **después** de confirmar la cita; conviene cambiarla.
+- **A quién va la orden de trabajo:** queda guardada y visible en el panel; no hay canal con el técnico todavía (los técnicos no tienen WhatsApp conectado). Descargarla es manual.
+- **Latencia:** el PDF se genera dentro de la llamada de `cotizar` y `confirmar` (≈1 s con Gotenberg). Si Gotenberg no responde, esa llamada puede tardar hasta 30 s antes de seguir sin PDF.
+
+**Lo que NO está hecho:** probar contra un WAHA real (sigue siendo SUPUESTO el formato de `sendFile`); anular documentos; enlace público `GET /d/{token}`; plantillas en inglés.

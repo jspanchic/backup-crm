@@ -278,11 +278,9 @@ describe("holders and test leads", () => {
       const { l } = await lead();
       await call(l, "guardar_datos", { nombre: "Prueba Sebas", tipo_cliente: "hogar" });
       await call(l, "cotizar", { tipo_cliente: "hogar", dormitorios: 3 });
-      const quoteId = (await owner.query("select id::int from core.quotes where deal_id = $1", [l.dealId])).rows[0].id;
-      const { rows } = await owner.query(
-        "insert into core.documents (document_type, deal_id, quote_id, payload) values ('quote', $1, $2, '{}') returning display_number, is_test",
-        [l.dealId, quoteId],
-      );
+      // A test lead's quote is issued by the quote tool itself (CRM-T14c).
+      const { rows } = await owner.query("select display_number, is_test from core.documents where deal_id = $1", [l.dealId]);
+      expect(rows).toHaveLength(1);
       expect(rows[0].is_test).toBe(true);
       expect(rows[0].display_number).toMatch(/^PRUEBA-COT-/);
     });

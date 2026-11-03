@@ -25,9 +25,11 @@ import { Separator } from "@/components/ui/separator";
 import { CompanyAvatar } from "../companies/CompanyAvatar";
 import { NoteCreate } from "../notes/NoteCreate";
 import { NotesIterator } from "../notes/NotesIterator";
+import { isCoreApiProvider } from "../providers/core-api";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Deal } from "../types";
 import { ContactList } from "./ContactList";
+import { DealDocuments } from "./DealDocuments";
 import { DealStageSelect } from "./DealStageSelect";
 import {
   findDealLabel,
@@ -243,6 +245,8 @@ const DealShowContent = () => {
               </dl>
             </section>
           )}
+
+          {isCoreApiProvider() ? <DealDocuments dealId={Number(record.id)} /> : null}
 
           <div className="m-4">
             <Separator className="mb-4" />

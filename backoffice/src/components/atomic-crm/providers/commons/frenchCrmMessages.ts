@@ -261,6 +261,46 @@ export const frenchCrmMessages = {
         "Une tâche de suivi est créée pour aujourd'hui lorsque l'affaire est gagnée pour la première fois. Vous pouvez la replanifier.",
       followup_save_error:
         "Impossible de modifier cette affaire. Vérifiez le contact et réessayez.",
+      documents: {
+        title: "Documents",
+        empty: "Aucun document pour le moment.",
+        types: {
+          quote: "Devis",
+          purchase_order: "Bon de commande",
+          work_order: "Ordre de travail",
+        },
+        test: "Test",
+        sent: "Envoyé",
+        queued: "En file d'envoi",
+        send_failed: "Échec de l'envoi",
+        not_sent: "Non envoyé",
+        no_file: "Pas encore de PDF",
+        generate: "Générer : %{type}",
+        generate_pdf: "Générer le PDF",
+        download: "Télécharger",
+        send: "Envoyer",
+        send_again: "Renvoyer",
+        locked:
+          "Les clients réels ne reçoivent pas de documents tant que les textes légaux ne sont pas confirmés.",
+        locked_hint: "Bloqué jusqu'à la confirmation des textes légaux",
+        for_technician: "Pour le technicien : il n'est pas envoyé au client.",
+        generated: "%{number} est prêt",
+        queued_notice: "%{number} mis en file d'envoi",
+        errors: {
+          unknown: "Un problème est survenu. Réessayez.",
+          pdf_engine_unavailable:
+            "Le moteur PDF n'est pas disponible. Réessayez dans un instant.",
+          legal_unconfirmed:
+            "Les clients réels ne reçoivent pas de documents tant que les textes légaux ne sont pas confirmés.",
+          no_conversation: "Le client n'a pas de conversation ouverte pour l'envoyer.",
+          no_appointment: "Cette affaire n'a pas de rendez-vous pour ce document.",
+          no_quote: "Cette affaire n'a pas encore de devis.",
+          invalid_state: "Ce document ne peut pas être émis dans l'état actuel.",
+          template_invalid: "Le modèle contient une erreur. Le document n'a pas été émis.",
+          stored_file_invalid: "Le fichier enregistré est endommagé. Il n'a pas été ouvert.",
+          no_file: "Ce document n'a pas encore de PDF.",
+        },
+      },
     },
     notes: {
       name: "Note |||| Notes",

@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { AppDeps } from "../app.ts";
+import { documentForQuote, documentsForConfirmation, type DocumentOutcome } from "../documents/automatic.ts";
 import { PHONE_PLACEHOLDER, reviewReply, type ReplyFacts } from "../reply-review.ts";
 import { confirmationMessage, slotLabel, type Language } from "../schedule-time.ts";
 import { verifyConversationToken } from "../token.ts";
@@ -92,11 +93,22 @@ const toSaveData = (input: z.infer<typeof saveDataSchema>) => ({
 
 const withoutUndefined = (value: object) => Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined));
 
-type ToolContext = { conversationId: number; paused: boolean };
+/** What the bot may say about the PDF: only what is true. Sending it is core-api's doing, not the bot's. */
+const pdfNotice = (outcome: DocumentOutcome, what: string) => ({
+  pdf: outcome.documento,
+  aviso_pdf:
+    outcome.documento === "en_cola"
+      ? `${what[0].toUpperCase()}${what.slice(1)} en PDF ya se puso en cola para enviarse por WhatsApp. Puedes mencionarlo, sin prometer a qué hora llega.`
+      : `No se envió ningún PDF de ${what}. No lo menciones ni lo prometas.`,
+});
+
+type ToolContext ={ conversationId: number; paused: boolean };
 
 const phoneForCustomer = (e164: string): string => parsePhoneNumberFromString(e164)?.formatNational() ?? e164;
 
 export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
+  const documents = { config: deps.config, db: deps.db, renderPdf: deps.renderPdf, log: deps.log };
+
   /** Token to conversation. Nothing else identifies the customer: no tool takes an id. */
   const authenticate = async (request: FastifyRequest, reply: FastifyReply): Promise<ToolContext | null> => {
     const header = request.headers.authorization;
@@ -215,6 +227,7 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
       descuento_pct: quote.discount_pct,
       // The prices are examples until JM confirms them: the bot must not present them as final.
       precios_confirmados: quote.price_confirmed,
+      ...pdfNotice(await documentForQuote(documents, conversationId), "la cotización"),
     };
   });
 
@@ -261,7 +274,13 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
       "select api.confirm_hold($1, $2::timestamptz, $3) as result",
       [conversationId, hold.start_at, message],
     );
-    return { confirmado: true, ...confirmed.rows[0].result, mensaje_enviado: true, aviso: "No escribas tú el mensaje de confirmación: ya se envió." };
+    return {
+      confirmado: true,
+      ...confirmed.rows[0].result,
+      mensaje_enviado: true,
+      aviso: "No escribas tú el mensaje de confirmación: ya se envió.",
+      ...pdfNotice(await documentsForConfirmation(documents, conversationId), "la orden de compra"),
+    };
   });
 
   tool("POST", "/tools/confirmar_titular", { schema: holderSchema }, async ({ conversationId }, input) => {

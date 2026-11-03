@@ -3,7 +3,7 @@ import { cpSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type pg from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createTestApp, type TestApp } from "./app-helpers.ts";
 import { createLead, createQuote, createTechnician, insertHold, ownerClient, setStatus, waitForPostgrest, type Lead } from "./helpers.ts";
 import { PdfEngineError } from "../src/documents/gotenberg.ts";
@@ -158,13 +158,15 @@ describe("documents as PDFs", () => {
       const appointmentId = await appointmentFor(lead, "hold", "09:00");
       const noQuote = await createLead(owner);
 
-      const noAppointment = await issue({ deal_id: lead.dealId, document_type: "purchase_order" });
+      const bare = await quotedLead();
+      const noAppointment = await issue({ deal_id: bare.dealId, document_type: "purchase_order" });
       const quoteWithAppointment = await issue({ deal_id: lead.dealId, document_type: "quote", appointment_id: appointmentId });
       const withoutQuote = await issue({ deal_id: noQuote.dealId, document_type: "quote" });
 
-      expect(noAppointment.statusCode).toBe(400);
-      expect(noAppointment.json()).toEqual({ error: "invalid_input", reason: "appointment_mismatch" });
+      expect(noAppointment.statusCode).toBe(409);
+      expect(noAppointment.json()).toEqual({ error: "invalid_state", reason: "no_appointment" });
       expect(quoteWithAppointment.statusCode).toBe(400);
+      expect(quoteWithAppointment.json()).toEqual({ error: "invalid_input", reason: "appointment_mismatch" });
       expect(withoutQuote.statusCode).toBe(409);
       expect(withoutQuote.json()).toEqual({ error: "invalid_state", reason: "no_quote" });
     });
@@ -186,6 +188,22 @@ describe("documents as PDFs", () => {
       const html = (await download(workOrder.json().id)).rawPayload.toString("utf8");
       expect(html).toContain("Test Technician");
       expect(html).toContain("1 Main St, Orlando");
+    });
+
+    it("finds the deal's live appointment by itself when the order does not name one", async () => {
+      const lead = await quotedLead();
+      const appointmentId = await appointmentFor(lead, "hold", "11:00");
+
+      const purchaseOrder = await issue({ deal_id: lead.dealId, document_type: "purchase_order" });
+      const workOrderTooEarly = await issue({ deal_id: lead.dealId, document_type: "work_order" });
+      await owner.query("update core.appointments set status = 'confirmed', hold_expires_at = null, confirmed_at = now() where id = $1", [appointmentId]);
+      const workOrder = await issue({ deal_id: lead.dealId, document_type: "work_order" });
+
+      expect(purchaseOrder.statusCode).toBe(201);
+      expect(workOrderTooEarly.json()).toEqual({ error: "invalid_state", reason: "no_appointment" });
+      expect(workOrder.statusCode).toBe(201);
+      const stored = await owner.query("select appointment_id::int as id from core.documents where id = $1", [workOrder.json().id]);
+      expect(stored.rows[0].id).toBe(appointmentId);
     });
 
     it("rejects a request with a field it does not know", async () => {
@@ -226,6 +244,9 @@ describe("documents as PDFs", () => {
   });
 
   describe("sending", () => {
+    // The outbox is shared by every test file: rows left by others would be claimed here, so start from an empty queue.
+    beforeEach(() => owner.query("update core.outbox set status = 'failed', last_error = 'cleared by a test' where status in ('pending', 'sending')"));
+
     it("queues the PDF for the customer's conversation and sends it as a WhatsApp file", async () => {
       const lead = await quotedLead({ isTest: true });
       const conversationId = await openConversation(lead, true);

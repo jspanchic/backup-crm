@@ -41,6 +41,8 @@ type FileRow = { id: number; sha256: string; size_bytes: number; is_test: boolea
 /** Templates and settings are read on every use: editing a file takes effect without restarting anything. */
 const readSettings = async (dir: string): Promise<Settings> => JSON.parse(await readFile(join(dir, "settings.json"), "utf8")) as Settings;
 
+export const loadSettings = (config: Config): Promise<Settings> => readSettings(templatesDirOf(config));
+
 const currentFile = async (db: Db, documentId: number): Promise<FileRow | null> => {
   const { rows } = await db.query<{ result: FileRow | null }>("select api.document_file($1) as result", [documentId]);
   return rows[0].result;
@@ -105,7 +107,7 @@ export const readDocumentPdf = async (deps: DocumentsDeps, documentId: number): 
  * Queues the file for the customer. A real customer receives nothing until JM confirms the legal texts
  * (`confirmed` in settings.json); test leads can always be sent to.
  */
-export const sendDocument = async (deps: DocumentsDeps, documentId: number): Promise<{ outboxId: number }> => {
+export const sendDocument = async (deps: DocumentsDeps, documentId: number, sender: "human" | "bot" = "human"): Promise<{ outboxId: number }> => {
   const file = await currentFile(deps.db, documentId);
   if (!file) throw new DocumentError("no_file", "the document has no file");
   const settings = await readSettings(templatesDirOf(deps.config));
@@ -113,6 +115,30 @@ export const sendDocument = async (deps: DocumentsDeps, documentId: number): Pro
     throw new DocumentError("legal_unconfirmed", "the legal texts are not confirmed, so real customers do not receive documents yet");
   }
   const caption = captionFor({ document_type: file.document_type, display_number: file.display_number }, settings);
-  const { rows } = await deps.db.query<{ id: number }>("select api.enqueue_document($1, $2, $3) as id", [documentId, file.id, caption]);
+  const { rows } = await deps.db.query<{ id: number }>("select api.enqueue_document($1, $2, $3, $4) as id", [documentId, file.id, caption, sender]);
   return { outboxId: rows[0].id };
+};
+
+export type DocumentListing = {
+  documents: {
+    id: number;
+    display_number: string;
+    document_type: DocumentType;
+    is_test: boolean;
+    status: string;
+    issued_at: string;
+    appointment_id: number | null;
+    file: { id: number; size_bytes: number } | null;
+    sent_at: string | null;
+    send_status: string | null;
+  }[];
+  can_issue: Record<DocumentType, boolean>;
+  /** False while the legal texts are not confirmed: documents of real customers are not sent. */
+  legal_confirmed: boolean;
+};
+
+/** What the deal's "Documents" section shows. */
+export const listDocuments = async (deps: DocumentsDeps, dealId: number): Promise<DocumentListing> => {
+  const { rows } = await deps.db.query<{ result: Omit<DocumentListing, "legal_confirmed"> }>("select api.list_documents($1) as result", [dealId]);
+  return { ...rows[0].result, legal_confirmed: (await loadSettings(deps.config)).confirmed };
 };

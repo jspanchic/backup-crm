@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { AppDeps } from "../app.ts";
-import { DocumentError, issueDocument, readDocumentPdf, sendDocument } from "../documents/service.ts";
+import { DocumentError, issueDocument, listDocuments, readDocumentPdf, sendDocument } from "../documents/service.ts";
 import { PdfEngineError } from "../documents/gotenberg.ts";
 import { StoredFileError } from "../documents/store.ts";
 import { TemplateError } from "../documents/template.ts";
@@ -21,6 +21,7 @@ const ISSUE = z.strictObject({
   appointment_id: id.nullish(),
 });
 const PARAM = z.strictObject({ id });
+const LIST = z.strictObject({ deal_id: id });
 
 export const adminDocuments = (app: FastifyInstance, deps: AppDeps, cors: (request: FastifyRequest, reply: FastifyReply) => void): void => {
   for (const url of ["/admin/documents", "/admin/documents/*"]) {
@@ -80,6 +81,17 @@ export const adminDocuments = (app: FastifyInstance, deps: AppDeps, cors: (reque
         created: document.created,
         file: { id: document.file.id, sha256: document.file.sha256, size_bytes: document.file.sizeBytes },
       });
+    } catch (error) {
+      return explain(error, reply, request);
+    }
+  });
+
+  app.get("/admin/documents", async (request, reply) => {
+    if (!guard(request, reply)) return reply;
+    const query = LIST.safeParse(request.query);
+    if (!query.success) return reply.code(400).send({ error: "invalid_input", reason: "bad_request" });
+    try {
+      return reply.code(200).header("Cache-Control", "private, no-store").send(await listDocuments(deps, query.data.deal_id));
     } catch (error) {
       return explain(error, reply, request);
     }

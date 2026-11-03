@@ -332,11 +332,14 @@ describe("bot tools", () => {
       const { token } = await start();
       const quote = (await call(token, "POST", "cotizar", { tipo_cliente: "hogar", dormitorios: 3 })).json();
       expect(quote.precios_confirmados).toBe(false);
+      // `pdf` and `aviso_pdf` only tell the bot whether a PDF was queued; they carry no amount.
       expect(Object.keys(quote).sort()).toEqual([
+        "aviso_pdf",
         "descuento",
         "descuento_pct",
         "minimo_aplicado",
         "moneda",
+        "pdf",
         "pies_cubiertos",
         "pies_descubiertos",
         "precios_confirmados",

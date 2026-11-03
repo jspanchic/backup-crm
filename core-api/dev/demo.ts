@@ -33,14 +33,20 @@ export const runDemo = async ({ sim, waha, db, print = console.log }: DemoDeps):
   /** `nickname` is what WhatsApp shows for the contact; `name` is who they say they are. */
   const customer = (name: string, nickname: string, phone = fakePhone()) => {
     const speak = async (text: string, options: { replies?: number; sentAt?: Date } = {}): Promise<string[]> => {
-      const before = waha.to(phone).length;
+      // A PDF that arrives next to the text is not one of Javier's replies: only the texts are counted here.
+      const textsNow = () => waha.to(phone).filter((message) => !message.file);
+      const before = textsNow().length;
       print(`   👤 ${name}: ${text}`);
       const sent = await sendInbound(sim, { phone, text, pushName: nickname, sentAt: options.sentAt });
       if (sent.status !== 200) throw new Error(`core-api answered ${sent.status} to a signed message`);
       const replies = options.replies ?? 1;
       if (replies === 0) return [];
-      const all = await waha.waitFor(phone, before + replies);
-      const fresh = all.slice(before).map((message) => message.text);
+      const deadline = Date.now() + 15_000;
+      while (textsNow().length < before + replies) {
+        if (Date.now() > deadline) throw new Error(`timed out waiting for reply ${before + replies} to ${phone} (got ${textsNow().length})`);
+        await new Promise((done) => setTimeout(done, 50));
+      }
+      const fresh = textsNow().slice(before).map((message) => message.text);
       for (const reply of fresh) print(`   🤖 Javier: ${quoted(reply)}`);
       return fresh;
     };
@@ -218,6 +224,22 @@ export const runDemo = async ({ sim, waha, db, print = console.log }: DemoDeps):
   const issueDocument = (deal: number, type: string, appointment?: number) =>
     documents("", { method: "POST", body: { deal_id: deal, document_type: type, appointment_id: appointment } });
 
+  const filesTo = (c: Customer) => waha.to(c.phone).filter((message) => message.file);
+  const waitForFiles = async (c: Customer, count: number) => {
+    const deadline = Date.now() + 15_000;
+    while (filesTo(c).length < count) {
+      if (Date.now() > deadline) throw new Error(`timed out waiting for file ${count} to ${c.phone} (got ${filesTo(c).length})`);
+      await new Promise((done) => setTimeout(done, 50));
+    }
+    return filesTo(c);
+  };
+  const sha = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
+
+  // The bot flow issues and sends documents by itself. A real customer gets nothing while the legal texts are unconfirmed.
+  check((await one(`select count(*)::int as n from core.documents where deal_id = $1`, [first!.deal]))!.n === 0, "a Carlos (cliente real) no se le emitió ni se le envió ningún PDF solo: los textos legales siguen por confirmar");
+  const autoQuote = filesTo(tester)[0];
+  check(/^PRUEBA-COT-\d{6}\.pdf$/.test(autoQuote?.file?.filename ?? "") && autoQuote.file!.bytes.subarray(0, 5).toString() === "%PDF-", "al cliente de prueba le llegó la cotización en PDF en cuanto Javier cotizó, sin que nadie la pidiera");
+
   const quoteDocument = await issueDocument(first!.deal, "quote");
   check(quoteDocument.status === 201 && /^COT-\d{6}$/.test(quoteDocument.json().display_number), `la cotización de Carlos tiene número propio (${quoteDocument.json().display_number ?? quoteDocument.json().error})`);
   const orderDocument = await issueDocument(first!.deal, "purchase_order", hold!.id);
@@ -231,13 +253,24 @@ export const runDemo = async ({ sim, waha, db, print = console.log }: DemoDeps):
   check(refused.status === 409 && refused.json().error === "legal_unconfirmed", "a un cliente real no se le envía nada mientras los textos legales estén por confirmar");
 
   const testQuote = await issueDocument(testIds!.deal, "quote");
-  check(/^PRUEBA-COT-\d{6}$/.test(testQuote.json().display_number ?? ""), "el cliente de prueba usa la serie de prueba: no deja huecos en la numeración real");
-  const beforeFile = waha.to(tester.phone).length;
+  check(testQuote.status === 200 && testQuote.json().display_number === autoQuote.file!.filename.replace(".pdf", ""), "la cotización de prueba ya existía (la serie de prueba no deja huecos en la numeración real): pedirla otra vez no gasta otro número");
+  check(sha(autoQuote.file!.bytes) === testQuote.json().file.sha256, "y el archivo que recibió el cliente es exactamente el guardado");
   const queued = await documents(`/${testQuote.json().id}/send`, { method: "POST" });
-  const delivered = (await waha.waitFor(tester.phone, beforeFile + 1)).at(-1);
-  check(queued.status === 202 && delivered?.file?.filename === `${testQuote.json().display_number}.pdf` && delivered.file.mimetype === "application/pdf", "al cliente de prueba le llega el PDF por WhatsApp, con el nombre de su número");
-  check(delivered?.file ? createHash("sha256").update(delivered.file.bytes).digest("hex") === testQuote.json().file.sha256 : false, "y el archivo recibido es exactamente el guardado");
-  print(`   📄 ${[quoteDocument, orderDocument, workDocument, testQuote].map((d) => d.json().display_number).join(" · ")}`);
+  const resent = (await waitForFiles(tester, 2))[1];
+  check(queued.status === 202 && resent.file!.filename === autoQuote.file!.filename, "desde el panel se puede volver a enviar: le llega otra vez, con el nombre de su número");
+
+  // The test customer confirms: the purchase order goes to them, the work order is only issued for the technician.
+  await tester.speak("Av. Prueba 1, Orlando, FL 32801");
+  await tester.speak("Sí, confirmo");
+  const orderFile = (await waitForFiles(tester, 3))[2];
+  check(/^PRUEBA-OC-\d{6}\.pdf$/.test(orderFile.file!.filename), "al confirmar, el cliente de prueba recibe la orden de compra en PDF");
+  const testDocuments = (await db.query(`select document_type, display_number from core.documents where deal_id = $1 order by id`, [testIds!.deal])).rows;
+  check(testDocuments.map((d) => d.document_type).join() === "quote,purchase_order,work_order", "y la orden de trabajo queda emitida para el técnico");
+  await new Promise((done) => setTimeout(done, 600));
+  check(filesTo(tester).length === 3, "la orden de trabajo no se le envía al cliente");
+  const listing = await documents(`?deal_id=${testIds!.deal}`);
+  check(listing.status === 200 && listing.json().documents.length === 3 && listing.json().legal_confirmed === false, "el panel ve los tres documentos de la oportunidad y que el candado legal sigue puesto");
+  print(`   📄 ${[quoteDocument, orderDocument, workDocument].map((d) => d.json().display_number).concat(testDocuments.map((d) => d.display_number)).join(" · ")}`);
 
   // ------------------------------------------------------------------ extra
   step("Extra · Mensajes que no deben pasar");
