@@ -50,4 +50,6 @@ Las pruebas usan Postgres y PostgREST reales y una base propia (`salvionix_test`
 | Cola de envío con ritmo y reintentos | `src/outbox.ts` |
 | Proxy del panel hacia PostgREST, con lista cerrada | `src/routes/admin-proxy.ts` |
 
-Las herramientas del bot (`/tools/*`) llegan con CRM-T6.
+## Herramientas del bot (CRM-T6)
+
+`ficha`, `guardar_datos`, `cotizar`, `escalar` y `responder`, con token de conversación y esquema estricto (`src/routes/tools.ts`). `responder` revisa el texto contra la base antes de encolarlo (`src/reply-review.ts`). Faltan las de agenda (CRM-T9) y `confirmar_titular` (CRM-T10). Detalle en `../docs/contratos/core-api-n8n.md`.

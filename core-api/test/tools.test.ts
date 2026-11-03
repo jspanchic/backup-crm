@@ -466,6 +466,14 @@ describe("bot tools", () => {
       expect(await scalar("select count(*)::int as n from public.tasks where contact_id = $1", [contactId])).toBe(1);
     });
 
+    it("leaves one task even if the database function is called twice, whatever the route does", async () => {
+      const { id, contactId } = await start();
+      await test.db.query("select api.escalate($1, 'uno')", [id]);
+      const again = await test.db.query("select api.escalate($1, 'dos') as result", [id]);
+      expect(again.rows[0].result).toEqual({ pausado: true, ya_estaba_pausado: true });
+      expect(await scalar("select count(*)::int as n from public.tasks where contact_id = $1", [contactId])).toBe(1);
+    });
+
     it("stops every other tool, and the bot is not called for the next message", async () => {
       const conversation = await start();
       await call(conversation.token, "POST", "escalar", { motivo: "ayuda" });

@@ -1,7 +1,7 @@
 # Plan de la Entrega 1 (demo funcional en local)
 
 - **Fecha:** lunes 02/11/2026
-- **Estado:** APROBADO el 02/11/2026 con los ajustes de la sección 13. CRM-T0b, CRM-T4 y CRM-T5 están hechos en ramas `wip/`, sin publicar. Lo demás no ha empezado.
+- **Estado:** APROBADO el 02/11/2026 con los ajustes de la sección 13. CRM-T0b, CRM-T4, CRM-T5 y CRM-T6 están hechos en ramas `wip/`, sin publicar. Lo demás no ha empezado.
 - **Alcance:** todo en local, sin VPS, sin WAHA real y sin Joel. Decisión tomada: opción C ([ADR-001](../decisiones/ADR-001-proveedor-datos.md)) y destino en el monorepo de `origin/f1-b0-repo-base`.
 - **Convención:** nombres de tablas, columnas, código y commits en inglés. Este documento y `docs/` en español.
 - **Citas:** `[ARQ]`, `[BASE]`, `[SM]` y `[GRAB]` son las claves definidas al inicio de la auditoría. Lo no verificado se marca **SUPUESTO**.
@@ -1032,3 +1032,43 @@ Cada una es un commit nuevo con `git merge --squash` desde su rama `wip/`, y un 
 1. **Contactos nuevos se llaman "WhatsApp ••0123"** hasta que el bot guarde el nombre. El panel los muestra así.
 2. **Un mensaje de un canal desconocido se registra sin firma,** porque no tenemos su secreto para verificarlo. Se limita a una fila por minuto y por sesión, y la ruta es solo red interna. Si prefieres rechazarlo sin registrar, es un cambio de una línea.
 3. **`sales_id` de contactos y oportunidades nuevos queda vacío** hasta que exista `core.brands.default_sales_id` (hoy es nulo). El panel funciona, pero nadie es "responsable". Hace falta decidir quién es el responsable de lo que crea el bot.
+
+## 18. Resultado de CRM-T6 (02/11/2026, `wip/crm-t6`, sin publicar)
+
+**Alcance: la mitad del plan, a propósito.** Las herramientas que dependen de la agenda o del titular se hacen con sus funciones, para no escribir rutas que no funcionen:
+
+| Herramienta | Dónde |
+|---|---|
+| `ficha`, `guardar_datos`, `cotizar`, `escalar`, `responder` | **CRM-T6 (hecho)** |
+| `horarios_libres`, `reservar`, `confirmar` | CRM-T9, con la disponibilidad y el vencimiento del hold |
+| `confirmar_titular` y "Prueba X" dentro de `guardar_datos` | CRM-T10 |
+
+Por eso **C1.2 y C1.3** (`confirmar` sin hold, y el mensaje de confirmación compuesto por `core-api`) pasan a CRM-T9: necesitan `reservar`.
+
+| Pieza | Estado |
+|---|---|
+| Autenticación | Token de 15 min, marca verificada contra la conversación, y se sigue `superseded_by` si el número cambió de dueño |
+| Esquema estricto | Un campo de más, incluido cualquier id, da 400 en cada herramienta, y la ficha rechaza hasta la query |
+| `cotizar` | No acepta ningún monto. Todo lo calcula `core.quote_totals` en la base. Los vectores del prompt dan 346, 1060, 208 y 150 |
+| `escalar` | Pausa y crea una tarea. Con la conversación pausada, todas las demás herramientas responden 409 |
+| `responder` | Revisa y, si pasa, encola. **C1.4 y C2.4 hechos**; C2.3 y C2.1 también |
+| Teléfono | El bot escribe `{{telefono}}` y `core-api` pone el número solo en el mensaje que sale. Cierra la pregunta pendiente con Joel (auditoría, 6.5): el teléfono completo no pasa nunca por n8n |
+| Pruebas | **461 pasan** (+177 frente a T5), con Postgres y PostgREST reales |
+| Mutaciones | Quité 22 reglas una por una. Las pruebas detectaron 21; la que se escapó (escalar dos veces) está protegida por otra capa y ahora tiene su prueba directa |
+
+**Decisiones tomadas por mí, para que las revises:**
+
+| Decisión | Por qué |
+|---|---|
+| `apellido` vacío se llena partiendo `nombre` en la primera palabra si el apellido aún es la marca "••1234" | El bot suele guardar "Carlos Pérez" en un solo campo |
+| "Hogar" no acepta `pies_cubiertos` y "empresa" no acepta `dormitorios` | El prompt dice que la superficie del hogar se estima por dormitorios y nunca se pregunta |
+| Cada área extra **debe** decir si tiene techo | El prompt lo exige ("nunca asumas") |
+| Los dominios permitidos son `salvionix.com` y `bioseguridad.bytogam.com` | Salen de los documentos del proyecto. **JM debe confirmarlos** |
+| No cuento como "confirmación" la palabra "reservado" | Un hold se explica como "reservado por 15 minutos" y no es una confirmación |
+
+**Límites que conozco:**
+
+- La revisión busca patrones: no detecta un monto en letras ("doscientos ocho"), y una frase legítima rara puede frenarse. La protección de fondo son las reglas de la base.
+- **Los horarios que el bot ofrece** (antes de reservar) **no se verifican todavía**: la revisión solo valida horas cuando afirma una confirmación. Con `horarios_libres` (CRM-T9) agrego "solo horarios de la lista".
+- La tarea de `escalar` queda **sin responsable** (`sales_id` vacío) hasta que decidas quién lo es.
+- **`quote.inputs` guarda lo que mandó el modelo,** ya traducido; el cliente puede ver una cotización distinta si cambia de idea, y la versión anterior queda `superseded`.
