@@ -14,9 +14,9 @@ registradas: agregar una ruta sin documentarla la hace fallar.
 | POST | `/tools/horarios_libres` | Bot | Token. Registra lo que muestra: solo esos horarios se pueden reservar o mencionar |
 | POST | `/tools/reservar` | Bot | Token. Solo un horario ofrecido en esta conversación. Reserva provisional de 15 min |
 | POST | `/tools/confirmar` | Bot | Token. Sin campos. Exige hold vigente, dirección y cotización. Envía el mensaje de confirmación |
+| POST | `/tools/confirmar_titular` | Bot | Token. Solo mientras haya una verificación pendiente (más de 90 días de silencio). Si es otra persona, abre un contacto y una conversación nuevos |
 | POST | `/tools/responder` | Bot | Token. El texto se revisa contra la base antes de encolarlo |
 | GET, POST, PATCH, DELETE | `/admin/rest/*` | Panel | Solo con `ADMIN_DEV_SUB` (desarrollo). Lista cerrada de recursos y métodos. Producción: Cloudflare Access (CRM-T3) |
 
 Todas las rutas `/tools/*`: cuerpo de máximo 16 KB; con la conversación pausada responden `409 bot_paused` (menos `ficha`).
 
-Falta `confirmar_titular` (CRM-T10).

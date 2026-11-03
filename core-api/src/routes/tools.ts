@@ -59,6 +59,9 @@ const escalateSchema = z.strictObject({ motivo: text(300) });
 const freeSlotsSchema = z.strictObject({ desde: z.iso.date().optional(), dias: z.int().min(1).max(14).optional() });
 const reserveSchema = z.strictObject({ inicio: z.iso.datetime({ offset: true }) });
 const confirmSchema = z.strictObject({});
+const holderSchema = z
+  .strictObject({ es_la_misma_persona: z.boolean(), nombre_nuevo: text(80).optional() })
+  .refine((data) => !(data.es_la_misma_persona && data.nombre_nuevo !== undefined), "nombre_nuevo is only for a different person");
 const replySchema = z.strictObject({ texto: text(4000) });
 
 const toQuoteInputs = (input: z.infer<typeof quoteSchema>) => ({
@@ -256,6 +259,11 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
       [conversationId, hold.start_at, message],
     );
     return { confirmado: true, ...confirmed.rows[0].result, mensaje_enviado: true, aviso: "No escribas tú el mensaje de confirmación: ya se envió." };
+  });
+
+  tool("POST", "/tools/confirmar_titular", { schema: holderSchema }, async ({ conversationId }, input) => {
+    const { rows } = await deps.db.query("select api.confirm_holder($1, $2, $3) as result", [conversationId, input.es_la_misma_persona, input.nombre_nuevo ?? null]);
+    return rows[0].result;
   });
 
   tool("POST", "/tools/responder", { schema: replySchema }, async ({ conversationId }, input, reply) => {

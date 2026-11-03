@@ -79,7 +79,10 @@ describe("appointments", () => {
           insertHold(other, b, technician, at("15:00"), at("16:00")),
         ]);
         expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
-        expect(results.find((result) => result.status === "rejected")).toMatchObject({ reason: OVERLAP });
+        // Two clashing inserts at the same instant end either as an overlap or, when Postgres notices the
+        // cycle first, as a deadlock: in both cases exactly one of them is refused.
+        const refused = results.find((result) => result.status === "rejected") as PromiseRejectedResult;
+        expect(["23P01", "40P01"]).toContain((refused.reason as { code: string }).code);
       } finally {
         await other.end();
       }

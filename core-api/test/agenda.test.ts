@@ -366,13 +366,18 @@ describe("agenda", () => {
       expect(results.filter((r) => r.statusCode === 200)).toHaveLength(1);
       expect(results.filter((r) => r.statusCode === 409 && r.json().error === "slot_taken")).toHaveLength(9);
 
-      const pair = await setup({ technicians: 2 });
-      const six = await Promise.all(Array.from({ length: 6 }, () => lead(pair)));
-      await Promise.all(six.map((l) => freeTimes(test, l, date)));
-      const outcomes = await Promise.all(six.map((l) => hold(l, date, "12:00")));
-      expect(outcomes.filter((r) => r.statusCode === 200)).toHaveLength(2);
-      const technicians = (await owner.query("select technician_id::int as id from core.appointments where status = 'hold' and technician_id = any($1)", [pair.technicianIds])).rows;
-      expect(new Set(technicians.map((row) => row.id)).size).toBe(2);
+      // Repeated: a clash between two inserts can end in a deadlock instead of a clean refusal, and that is
+      // timing dependent, so one lucky run proves nothing.
+      for (let round = 0; round < 5; round++) {
+        const pair = await setup({ technicians: 2 });
+        const six = await Promise.all(Array.from({ length: 6 }, () => lead(pair)));
+        await Promise.all(six.map((l) => freeTimes(test, l, date)));
+        const outcomes = await Promise.all(six.map((l) => hold(l, date, "12:00")));
+        expect(outcomes.map((r) => r.statusCode).sort(), `round ${round}`).toEqual([200, 200, 409, 409, 409, 409]);
+        expect(outcomes.filter((r) => r.statusCode === 409).every((r) => r.json().error === "slot_taken")).toBe(true);
+        const technicians = (await owner.query("select technician_id::int as id from core.appointments where status = 'hold' and technician_id = any($1)", [pair.technicianIds])).rows;
+        expect(new Set(technicians.map((row) => row.id)).size).toBe(2);
+      }
     });
 
     it("lets one through when the times only touch through the margin", async () => {

@@ -181,6 +181,10 @@ begin
   select * into conversation from core.conversations where id = p_conversation_id;
   select * into settings from core.scheduling_settings where brand_id = conversation.brand_id;
 
+  -- One booking at a time per brand. Two sessions inserting clashing rows into an exclusion constraint
+  -- at the same moment can deadlock instead of failing cleanly; booking is rare, so we queue instead.
+  perform pg_advisory_xact_lock(hashtext('book:' || conversation.brand_id));
+
   if not exists (
     select 1 from core.offered_slots
     where conversation_id = p_conversation_id and start_at = p_start_at and offered_at > now() - interval '1 day'
