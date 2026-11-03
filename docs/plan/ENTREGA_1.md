@@ -1072,3 +1072,37 @@ Por eso **C1.2 y C1.3** (`confirmar` sin hold, y el mensaje de confirmación com
 - **Los horarios que el bot ofrece** (antes de reservar) **no se verifican todavía**: la revisión solo valida horas cuando afirma una confirmación. Con `horarios_libres` (CRM-T9) agrego "solo horarios de la lista".
 - La tarea de `escalar` queda **sin responsable** (`sales_id` vacío) hasta que decidas quién lo es.
 - **`quote.inputs` guarda lo que mandó el modelo,** ya traducido; el cliente puede ver una cotización distinta si cambia de idea, y la versión anterior queda `superseded`.
+
+
+## 19. Resultado de CRM-T9 (02/11/2026, `wip/crm-t9`, sin publicar)
+
+| Pieza | Estado |
+|---|---|
+| `horarios_libres` | Rejilla de "duración + margen" (60 + 30 min de ejemplo: 09:00, 10:30, 12:00, 13:30, 15:00) dentro de la disponibilidad del técnico, en la zona horaria de la marca. Descarta ausencias, aviso mínimo, horizonte y lo ocupado. Máximo 12, el más cercano primero |
+| Qué libera un horario | Citas canceladas o expiradas, un hold que ya venció (aunque nadie lo haya marcado), citas de prueba, y el propio hold del cliente |
+| `reservar` | Solo un horario **que `horarios_libres` mostró a esa conversación** en el último día. Hold de 15 min |
+| Ajuste 1 (hold vencido) | **Hecho.** En la misma transacción: se marcan `expired` los holds vencidos, se suelta el hold anterior del cliente y se prueba técnico por técnico. Si la reserva falla, **no queda nada marcado a medias** (prueba A5c) |
+| Concurrencia | **Hecho.** De 2 reservas simultáneas gana 1. De 10 con un técnico gana 1; de 6 con dos técnicos ganan 2, en técnicos distintos |
+| `confirmar` | Exige hold vigente, dirección y cotización. Cierra la oportunidad (`won`, que crea la tarea de seguimiento) y **encola el mensaje de confirmación en la misma transacción**. El mensaje lo escribe `core-api` desde la cita, no el modelo |
+| Ajuste 2 (responder) | **Hecho.** `responder` rechaza (`schedule_not_offered`) cualquier hora que no salió de `horarios_libres` en esa conversación, y fechas o días de la semana en las frases que hablan del servicio. Las fechas de emisión y vigencia de una cotización no se tocan |
+| Responsable por defecto | Columna `core.brands.default_sales_id` (configurable por marca, no fija). Contactos, oportunidades y la tarea de `escalar` y de venta cerrada se asignan a esa persona. En la demo: Sebastián; en producción lo define JM. Probado con cambio de responsable, marca sin responsable y persona inexistente |
+| Pruebas | **545 pasan** (+84 frente a T6), con Postgres y PostgREST reales |
+| Mutaciones | Quité 23 reglas una por una. Las pruebas detectaron 22; la que se escapó ("ya agendado puede reservar otra vez") estaba cubierta por otra capa y ahora tiene su prueba directa |
+
+**Lo que cambió respecto del plan**
+
+| Cambio | Por qué |
+|---|---|
+| Un hold vencido **sí bloquea** si se inserta directo por SQL sin marcarlo | La exclusión no puede mirar el reloj. `horarios_libres` y `reservar` lo ignoran; el barrido (`api.expire_holds`, cada 60 s) lo limpia |
+| El bot **no puede aceptar la hora que propone el cliente** | Cumple "el bot ofrece, no acepta" (auditoría, fila 12). Si el cliente pide una hora libre, el bot la busca con `horarios_libres` y la ofrece |
+| Una hora final solo se acepta junto con la inicial ("de 10:00 a 11:00") | Si no, la hora de fin de un horario ofrecido pasaba como si fuera otro horario. Lo encontró una prueba |
+| `confirmar` exige cotización | Sin precio no hay venta |
+
+**Un fallo de mi SQL que las pruebas encontraron:** la regla "se necesita una cotización" nunca se aplicaba, porque una cotización ausente es un `null` de JSON y no de SQL. Quedó corregido y probado.
+
+**Límites que conozco**
+
+- El margen (30 min), el aviso mínimo (120 min) y el horizonte (14 días) son **valores míos de ejemplo**, marcados "por confirmar" con JM.
+- Las horas de otros usuarios de WhatsApp en frases del bot ("Mi horario de atención es de 9 a 5") también se rechazan: son horas que no salieron de `horarios_libres`. Si JM quiere comunicar un horario de atención, hace falta una regla aparte.
+- Palabras relativas ("mañana", "hoy") no se verifican: solo horas, fechas y días de la semana explícitos.
+- No probé el cambio de hora de verano con `horarios_libres`: el horizonte es de 14 días y hoy no hay un cambio en ese rango. Lo cubre la prueba de la revisión de textos (invierno y verano) y la conversión de zona.

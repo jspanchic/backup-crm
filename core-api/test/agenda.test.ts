@@ -578,6 +578,20 @@ describe("agenda", () => {
       expect((await toolCall(test, l.token, "POST", "reservar", { inicio: slots[1].inicio })).json().error).toBe("invalid_state");
     });
 
+    it("does not book a second time while an appointment is confirmed, even if the opportunity was reopened", async () => {
+      const s = await setup();
+      const l = await ready(s);
+      const slots = (await call(l, "horarios_libres", { desde: day(3), dias: 1 })).json().horarios as { inicio: string }[];
+      await toolCall(test, l.token, "POST", "reservar", { inicio: slots[0].inicio });
+      await call(l, "confirmar", {});
+      await owner.query("update public.deals set stage = 'in-negociation' where id = $1", [l.dealId]);
+
+      const response = await toolCall(test, l.token, "POST", "reservar", { inicio: slots[1].inicio });
+      expect(response.statusCode).toBe(409);
+      expect(response.json().message).toMatch(/already scheduled/);
+      expect((await appointmentsOf(owner, l.dealId)).map((row) => row.status)).toEqual(["confirmed"]);
+    });
+
     it("rejects any field in confirmar", async () => {
       const l = await ready(await setup());
       expect((await call(l, "confirmar", { contact_id: 1 })).statusCode).toBe(400);

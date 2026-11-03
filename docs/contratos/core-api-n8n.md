@@ -108,6 +108,9 @@ Todas con `Authorization: Bearer <token>`, **cuerpo JSON de máximo 16 KB y esqu
 | `POST /tools/guardar_datos` | Al menos uno de: `nombre`, `apellido`, `email`, `idioma` (`es`\|`en`), `tipo_cliente` (`hogar`\|`empresa`), `tipo_espacio`, `direccion`, `tamano`, `zip` | `{guardado: [...]}`. Con nombre y tipo de cliente, la oportunidad pasa a `contacted` |
 | `POST /tools/cotizar` | `tipo_cliente`; hogar: `dormitorios`, `autos_techados`, `autos_descubiertos`; empresa: `pies_cubiertos`; ambos: `areas_extra[]` con `techada` (obligatorio, nunca se asume) y `pies`, `metros` o `pasos_largo`+`pasos_ancho` | `version`, `subtotal`, `descuento`, `total`, `minimo_aplicado`, `pies_cubiertos`, `pies_descubiertos`, `moneda`, `descuento_pct`, `precios_confirmados`. **No acepta montos** |
 | `POST /tools/escalar` | `motivo` (1 a 300) | `{pausado, ya_estaba_pausado}`. Pausa el bot y crea una tarea de seguimiento |
+| `POST /tools/horarios_libres` | `desde` (fecha, opcional), `dias` (1 a 14, opcional). Cuerpo vacío = próximos 7 días | `zona_horaria` y hasta 12 `horarios` con `inicio`, `fin` y `texto` ya escrito en el idioma del cliente. **Solo estos horarios se pueden reservar o mencionar** |
+| `POST /tools/reservar` | `inicio` (fecha y hora con zona, tal cual la devolvió `horarios_libres`) | `inicio`, `fin`, `vence_en` (15 min). `409 slot_not_offered` si no salió de `horarios_libres`; `409 slot_taken` si ya no está libre |
+| `POST /tools/confirmar` | Nada (`{}` o vacío) | `{confirmado, inicio, fin, mensaje_enviado}`. Exige hold vigente (`409 hold_expired` si venció), dirección y cotización. **El mensaje de confirmación lo escribe `core-api` y ya se envió: el bot no debe escribir otro** |
 | `POST /tools/responder` | `texto` (1 a 4000) | `{encolado, id}` o `422` |
 
 **Marca del teléfono.** Si el bot necesita repetirle al cliente su celular, escribe `{{telefono}}`: `core-api` pone el número solo en el mensaje que sale. El historial que vuelve a n8n conserva la marca, así que el número completo no pasa nunca por el bot.
@@ -121,6 +124,7 @@ Todas con `Authorization: Bearer <token>`, **cuerpo JSON de máximo 16 KB y esqu
 | `time_mismatch`, `date_mismatch` | Con una cita confirmada, escribe una hora, fecha o día de la semana que no es el suyo (hora en la zona de la marca) |
 | `url_not_allowed` | Enlace fuera de los dominios de la marca |
 | `phone_in_reply` | Un número de 10 o más dígitos escrito a mano |
+| `schedule_not_offered` | Escribe una hora (`10:30`, `3 pm`), o una fecha o día de la semana en una frase sobre el servicio, que no salió de `horarios_libres` en esta conversación (o no es la de su hold o cita). Una hora final solo vale junto con la inicial |
 | `phone_unavailable` | Usa `{{telefono}}` y el cliente no tiene número |
 
 **Límite honesto:** la revisión busca patrones en el texto. Puede dejar pasar un monto escrito en letras ("doscientos ocho") o una fecha dicha de otra forma, y puede frenar una frase legítima; en ese caso el modelo recibe el motivo y reintenta. La protección de fondo no depende de ella: los montos salen de la cotización que calcula la base, y una cita solo se confirma desde un hold vigente.
