@@ -1006,7 +1006,7 @@ Cada una es un commit nuevo con `git merge --squash` desde su rama `wip/`, y un 
 | Cola de envío | Ritmo de 2 a 5 s, 3 intentos con espera creciente, sin doble envío con varios trabajadores |
 | Proxy del panel | Lista cerrada de 14 recursos y sus métodos. Sin identidad de desarrollo, o en producción, **no existe** |
 | Pruebas | **284 pasan** (138 de CRM-T4, 146 nuevas), con Postgres y PostgREST reales |
-| Mutaciones | Quité 22 reglas una por una. Las pruebas detectaron las 22; las de pausa del bot necesitaron quitar sus tres protecciones a la vez, porque cada una cubre a las otras |
+| Mutaciones | Quité 21 reglas una por una. Las pruebas detectaron las 21; las de pausa del bot necesitaron quitar sus tres protecciones a la vez, porque cada una cubre a las otras |
 
 **Lo que las pruebas encontraron en mi propio diseño, y se corrigió:**
 
