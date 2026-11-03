@@ -66,6 +66,7 @@ describe("permissions", () => {
         sales: "SELECT",
         tags: crud,
         tasks: crud,
+        technicians_summary: "SELECT",
       });
     });
 
@@ -172,7 +173,7 @@ describe("permissions", () => {
       expect((await call("contacts?limit=1", { token })).status).toBe(401);
     });
 
-    it.each(["contacts_summary", "companies_summary", "deals", "tasks", "activity_log", "appointments_summary", "conversation_messages"])(
+    it.each(["contacts_summary", "companies_summary", "deals", "tasks", "activity_log", "appointments_summary", "conversation_messages", "technicians_summary"])(
       "lets the panel read %s",
       async (resource) => {
         expect((await call(`${resource}?limit=1`)).status).toBeLessThan(300);
@@ -186,12 +187,17 @@ describe("permissions", () => {
       },
     );
 
-    it.each(["merge_contacts", "get_user_id_by_email", "health"])("does not expose the function %s", async (name) => {
+    it.each(["merge_contacts", "get_user_id_by_email", "health", "staff_book", "staff_cancel", "staff_reschedule", "staff_confirm", "set_availability", "add_time_off"])("does not expose the function %s", async (name) => {
       expect([403, 404]).toContain((await call(`rpc/${name}`, { method: "POST", body: "{}" })).status);
     });
 
     it("does not let the panel write to appointments through the view", async () => {
       const response = await call("appointments_summary", { method: "POST", body: JSON.stringify({ status: "confirmed" }) });
+      expect(response.status).toBeGreaterThanOrEqual(400);
+    });
+
+    it("does not let the panel write to the technicians through the view", async () => {
+      const response = await call("technicians_summary", { method: "POST", body: JSON.stringify({ name: "x", brand_id: 1 }) });
       expect(response.status).toBeGreaterThanOrEqual(400);
     });
 

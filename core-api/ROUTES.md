@@ -17,6 +17,13 @@ registradas: agregar una ruta sin documentarla la hace fallar.
 | POST | `/tools/confirmar_titular` | Bot | Token. Solo mientras haya una verificación pendiente (más de 90 días de silencio). Si es otra persona, abre un contacto y una conversación nuevos |
 | POST | `/tools/responder` | Bot | Token. El texto se revisa contra la base antes de encolarlo |
 | GET | `/admin/session` | Panel | Solo con `ADMIN_DEV_SUB`. Devuelve nombre, id y si es administrador del usuario del panel; nada más |
+| POST | `/admin/agenda/appointments` | Panel | Solo con `ADMIN_DEV_SUB`. Esquema estricto. Reserva un horario (hold) para una oportunidad, o lo confirma en el mismo paso. Sin cruces, dentro de la disponibilidad del técnico, una reserva a la vez por marca (reglas en la base, `api.staff_book`) |
+| POST | `/admin/agenda/appointments/:id/confirm` | Panel | Solo con `ADMIN_DEV_SUB`. Exige hold vigente, dirección y cotización enviada |
+| POST | `/admin/agenda/appointments/:id/cancel` | Panel | Solo con `ADMIN_DEV_SUB`. Libera el horario |
+| POST | `/admin/agenda/appointments/:id/reschedule` | Panel | Solo con `ADMIN_DEV_SUB`. Cancela y reserva en una transacción: si el nuevo horario está ocupado no cambia nada |
+| POST | `/admin/agenda/technicians/:id/availability` | Panel | Solo con `ADMIN_DEV_SUB`. Reemplaza las ventanas semanales; no toca las citas ya reservadas y avisa cuántas quedan fuera |
+| POST | `/admin/agenda/technicians/:id/time-off` | Panel | Solo con `ADMIN_DEV_SUB`. Agrega una ausencia y avisa cuántas citas cubre |
+| DELETE | `/admin/agenda/time-off/:id` | Panel | Solo con `ADMIN_DEV_SUB`. Quita una ausencia |
 | GET, POST, PATCH, DELETE | `/admin/rest/*` | Panel | Solo con `ADMIN_DEV_SUB` (desarrollo). Lista cerrada de recursos y métodos (`ADMIN_RESOURCES`; `conversation_messages` y `appointments_summary` son solo lectura). Del encabezado `Accept` solo pasa `application/json` y `application/vnd.pgrst.object+json` (el `getOne` del panel). Producción: Cloudflare Access (CRM-T3) |
 
 Todas las rutas `/tools/*`: cuerpo de máximo 16 KB; con la conversación pausada responden `409 bot_paused` (menos `ficha`).

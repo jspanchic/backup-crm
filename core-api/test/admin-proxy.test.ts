@@ -151,6 +151,7 @@ describe("panel proxy", () => {
         "sales",
         "tags",
         "tasks",
+        "technicians_summary",
       ]);
     });
   });

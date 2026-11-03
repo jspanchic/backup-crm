@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { SignJWT } from "jose";
 import type { AppDeps } from "../app.ts";
+import { adminAgenda } from "./admin-agenda.ts";
 
 type Method = "GET" | "POST" | "PATCH" | "DELETE";
 
@@ -25,6 +26,7 @@ export const ADMIN_RESOURCES: Record<string, Method[]> = {
   activity_log: ["GET"],
   appointments_summary: ["GET"],
   conversation_messages: ["GET"],
+  technicians_summary: ["GET"],
   "rpc/global_search": ["POST"],
 };
 
@@ -56,6 +58,9 @@ export const adminProxy = (app: FastifyInstance, deps: AppDeps): void => {
       reply.header("Access-Control-Expose-Headers", "Content-Range");
     }
   };
+
+  // The calendar writes through its own routes, not through the proxy: it has no write access to schema core.
+  adminAgenda(app, deps, cors);
 
   app.options("/admin/rest/*", async (request, reply) => {
     cors(request, reply);
