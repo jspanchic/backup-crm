@@ -1275,3 +1275,19 @@ Por eso **C1.2 y C1.3** (`confirmar` sin hold, y el mensaje de confirmación com
 - **`sendFile` de WAHA:** el formato (`file.data` en base64, `caption`) sale de su documentación; **no lo probé contra un WAHA real** (SUPUESTO). Falta la versión de producción de WAHA (Joel).
 - **PDFtk en la imagen de Gotenberg (licencia):** sigue pendiente de revisar con un abogado si el producto se entrega empaquetado (sección 14.1).
 - **Los PDF se vieron como imagen** de la misma página (la captura de Chromium de Gotenberg); no los abrí en un lector de PDF.
+
+## 26. Resultado de CRM-T12, parte local (03/11/2026, `wip/crm-t12`, sin publicar)
+
+**T12 local = copia cifrada de la base y su restauración**, probadas en local y listas para llevar al servidor. Guía: `docs/COPIAS_BD.md`.
+
+| Pieza | Estado |
+|---|---|
+| `scripts/db-backup.sh` | Guarda la base (`pg_dump` en formato comprimido de Postgres) y los PDF en un solo archivo `.tar.gpg` cifrado con **AES-256** y comprobación de integridad (frase en un archivo fuera del repositorio). Lleva un SHA-256 de cada archivo, se **vuelve a abrir** antes de darlo por bueno, se escribe con nombre temporal y se renombra, y conserva las últimas N copias (14 por omisión) |
+| `scripts/db-restore.sh` | Descifra y comprueba todo **antes** de tocar una base; restaura a una base **nueva** (no pisa ninguna salvo con `--replace`); si falla a la mitad, borra la base a medias; copia los PDF solo si se pide |
+| `scripts/test-db-backup.sh` | Copia → restaura en una base temporal → compara **tabla por tabla (filas, contenido y permisos), función por función y secuencia por secuencia**, y los PDF byte por byte. Resultado con los datos de la demo: **17 de 17**, 148 objetos |
+| Lo que prueba además | Que el archivo no deja ver nada; que frase equivocada, un byte cambiado o archivo cortado se rechazan sin crear ninguna base; que la comparación **sí detecta** una fila cambiada y un permiso de más; que la retención borra las viejas |
+| Qué NO entra | Roles y contraseñas (se crean con `db:bootstrap`) y cualquier secreto |
+
+**Hallazgo al probarlo:** la primera comparación falló en dos tablas (`public.favicons_excluded_domains` y `public.user_invitations`): en el origen los permisos del dueño estaban escritos de forma explícita y en la copia restaurada quedaron como "por omisión". **Son los mismos permisos**, así que la comparación los trata igual (usa `acldefault`); con eso no se afloja nada: los permisos de los demás roles se comparan tal cual, y la prueba demuestra que detecta un permiso de más.
+
+**Lo que NO está hecho** (depende del servidor): copia **fuera** del servidor, aviso a Discord si una copia falla, prueba de restauración periódica allí, retención por semanas y meses, recuperación a un instante (WAL) y la frase en un gestor de secretos. La ruta del cron de `docs/COPIAS_BD.md` es un **SUPUESTO**.
