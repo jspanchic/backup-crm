@@ -112,7 +112,8 @@ cambian según el día y la hora en que lo corras: siempre cuenta con "el primer
 
 - **Qué hacer:** clic en un bloque del calendario. Se abre su ficha con **Confirmar** (si es una reserva), **Reprogramar** y
   **Cancelar cita**.
-- **Qué debes ver:** al **Mover** a otro día u hora, la cita pasa al nuevo horario ("Cita reprogramada"). Si el horario nuevo está
+- **Qué debes ver:** al **Mover** a otro día u hora, la cita pasa al nuevo horario ("Cita reprogramada"). Si era una reserva ámbar, sigue
+  siendo una reserva, con 15 minutos nuevos. Si el horario nuevo está
   ocupado, da el mismo rechazo y **la cita se queda donde estaba**. **Cancelar cita** pide confirmación ("El horario queda libre")
   y el bloque desaparece.
 
