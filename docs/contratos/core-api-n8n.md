@@ -1,6 +1,6 @@
 # Contrato HTTP entre core-api y el bot (n8n)
 
-Versión del contrato: **1**. Estado: implementado en `core-api/src/bot.ts` y probado en `core-api/test/webhook.test.ts`. Las herramientas están en la sección 8 (CRM-T6; faltan las de agenda, que llegan con CRM-T9 y CRM-T10).
+Versión del contrato: **1**. Estado: implementado en `core-api/src/bot.ts` y probado en `core-api/test/webhook.test.ts`. Las herramientas están en la sección 4b (CRM-T6; faltan las de agenda, que llegan con CRM-T9 y CRM-T10).
 
 ## 1. Mensaje de core-api al bot
 
