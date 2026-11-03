@@ -380,6 +380,39 @@ describe("agenda", () => {
       }
     });
 
+    it("queues the bookings of one brand: a second booking waits until the first one is finished", async () => {
+      // Two clashing inserts at the same instant can end in a deadlock instead of a clean refusal, which
+      // depends on timing. Making the bookings of a brand wait for each other is what prevents it, so it is
+      // checked directly: while one booking is open, another does not start.
+      const s = await setup();
+      const [a, b] = [await lead(s), await lead(s)];
+      const date = day(3);
+      await freeTimes(test, a, date);
+      await freeTimes(test, b, date);
+      const first = await ownerClient();
+      const second = await ownerClient();
+      try {
+        await first.query("begin");
+        await first.query("select api.hold_slot($1, $2::timestamptz)", [a.conversationId, at(date, "09:00")]);
+
+        let secondDone = false;
+        const waiting = second
+          .query("select api.hold_slot($1, $2::timestamptz)", [b.conversationId, at(date, "12:00")])
+          .finally(() => (secondDone = true));
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        expect(secondDone).toBe(false);
+
+        await first.query("commit");
+        await waiting;
+        expect(secondDone).toBe(true);
+        expect((await appointmentsOf(owner, b.dealId))[0].status).toBe("hold");
+      } finally {
+        await first.query("rollback").catch(() => {});
+        await first.end();
+        await second.end();
+      }
+    });
+
     it("lets one through when the times only touch through the margin", async () => {
       const s = await setup();
       const [a, b] = [await lead(s), await lead(s)];

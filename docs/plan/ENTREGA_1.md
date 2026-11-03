@@ -1106,3 +1106,36 @@ Por eso **C1.2 y C1.3** (`confirmar` sin hold, y el mensaje de confirmación com
 - Las horas de otros usuarios de WhatsApp en frases del bot ("Mi horario de atención es de 9 a 5") también se rechazan: son horas que no salieron de `horarios_libres`. Si JM quiere comunicar un horario de atención, hace falta una regla aparte.
 - Palabras relativas ("mañana", "hoy") no se verifican: solo horas, fechas y días de la semana explícitos.
 - No probé el cambio de hora de verano con `horarios_libres`: el horizonte es de 14 días y hoy no hay un cambio en ese rango. Lo cubre la prueba de la revisión de textos (invierno y verano) y la conversión de zona.
+
+
+## 20. Resultado de CRM-T10 (02/11/2026, `wip/crm-t10`, sin publicar)
+
+| Pieza | Estado |
+|---|---|
+| `confirmar_titular` | `es_la_misma_persona` y, si es otra, `nombre_nuevo`. Solo funciona **mientras haya una verificación pendiente** (más de `reverify_after_days` de silencio entre dos mensajes y sin respuesta todavía): el modelo no puede usarla para borrar el contexto de un cliente cuando quiera |
+| Misma persona | Se anota la verificación y todo sigue igual: sin contacto nuevo, sin conversación nueva |
+| Otra persona | En una transacción: se cierra el período del titular, se crea un contacto y una oportunidad nuevos, se cierra la conversación (`superseded_by`) y se abre otra. **Lo dicho desde el mensaje que rompió el silencio, con las respuestas, pasa a la conversación nueva**, porque lo dijo la persona nueva |
+| El dueño anterior | Conserva todo: contacto, datos, historial anterior al silencio, cotizaciones, oportunidades y citas confirmadas. La persona nueva no ve nada de eso: ni en la ficha ni en el historial que recibe el bot |
+| Token de la conversación vieja | Sigue valiendo hasta vencer y **actúa sobre la conversación nueva**, nunca sobre los datos del dueño anterior (criterio A10) |
+| "Prueba X" | Un contacto cuyo nombre empieza con "Prueba" (sin distinguir mayúsculas ni espacios) queda marcado, y la marca pasa a sus oportunidades y a sus citas activas. **Es un trigger de la base, no código de la aplicación**: vale también para el panel, las importaciones y el nombre de WhatsApp (`pushName`) |
+| Citas de prueba | No bloquean la agenda real, tampoco si el nombre se descubre tarde: un horario ya reservado queda libre al marcarse como prueba (A12 y A13) |
+| Numeración | Las pruebas usan su propia serie (`PRUEBA-COT-…`), y toda marca nueva recibe sus series al crearse |
+| Pruebas | **579 pasan** (+34), con Postgres y PostgREST reales |
+| Mutaciones | Quité 14 reglas una por una, entre ellas la de pendiente, el cierre del período, el movimiento de mensajes, la regla del nombre y su propagación. Las pruebas detectaron las 14 |
+
+**Criterios del plan que ya pasan:** A7, A8, A9, A10, A11, A12, A13, A14.
+
+**Hallazgos de las pruebas, corregidos**
+
+| Hallazgo | Corrección |
+|---|---|
+| **Reservas simultáneas podían terminar en error 500.** Con dos técnicos y seis clientes a la vez, Postgres a veces detecta un interbloqueo (deadlock) entre dos inserciones que chocan contra una restricción de exclusión, en vez de rechazar una con un error limpio | `reservar` ahora entra en fila **por marca** (candado `pg_advisory_xact_lock`): reservar es poco frecuente y así no hay interbloqueo. La prueba repite 5 rondas, porque el fallo dependía del azar |
+| La marca "prueba" no se propagaba a las oportunidades | El trigger que propaga disparaba solo con `update of is_test`, y un cambio hecho por otro trigger no cuenta como columna de la sentencia. Ahora dispara con cualquier `update` |
+| Una marca nueva no tenía series de documentos | Un trigger las crea al crear la marca |
+
+**Límites que conozco**
+
+- **Una inserción directa en SQL de dos citas que chocan a la vez** puede dar `23P01` (choque) o `40P01` (interbloqueo): en los dos casos una se rechaza. La prueba acepta ambos.
+- **"Prueba" como primer nombre real** (un cliente que se llame así) queda marcado como prueba: se corrige a mano. Lo contrario, un apellido "Prueba", no marca.
+- **Nada desmarca solo.** Si alguien marcó por error un cliente real, hay que cambiar `is_test` a mano.
+- **El plazo de reasignación** (90 días de ejemplo; el Router de TEST usa 180) sigue por confirmar con JM.
