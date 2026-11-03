@@ -1,0 +1,227 @@
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { z } from "zod";
+import type { AppDeps } from "../app.ts";
+import { PHONE_PLACEHOLDER, reviewReply, type ReplyFacts } from "../reply-review.ts";
+import { verifyConversationToken } from "../token.ts";
+import { parsePhoneNumberFromString } from "libphonenumber-js/min";
+
+// Every schema is strict: an unknown key, including any id of a customer, is a 400.
+// The Spanish keys are the contract with the bot; the database uses English names.
+
+const text = (max: number) =>
+  z
+    .string()
+    .trim()
+    .min(1)
+    .max(max)
+    .refine((value) => !/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(value), "control characters");
+
+const spaceTypes = ["home", "office_warehouse", "restaurant_kitchen", "clinic", "veterinary", "gym", "school_daycare", "hotel_rental", "other"] as const;
+
+const saveDataSchema = z
+  .strictObject({
+    nombre: text(80).optional(),
+    apellido: text(80).optional(),
+    email: z.email().max(200).optional(),
+    idioma: z.enum(["es", "en"]).optional(),
+    tipo_cliente: z.enum(["hogar", "empresa"]).optional(),
+    tipo_espacio: z.enum(spaceTypes).optional(),
+    direccion: text(300).optional(),
+    tamano: text(100).optional(),
+    zip: text(10).optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, "at least one field");
+
+const area = z.union([
+  z.strictObject({ techada: z.boolean(), pies: z.number().positive().max(10_000_000) }),
+  z.strictObject({ techada: z.boolean(), metros: z.number().positive().max(1_000_000) }),
+  z.strictObject({ techada: z.boolean(), pasos_largo: z.number().positive().max(10_000), pasos_ancho: z.number().positive().max(10_000) }),
+]);
+
+const quoteSchema = z
+  .strictObject({
+    tipo_cliente: z.enum(["hogar", "empresa"]),
+    dormitorios: z.int().min(0).max(30).optional(),
+    pies_cubiertos: z.number().min(0).max(10_000_000).optional(),
+    autos_techados: z.int().min(0).max(20).optional(),
+    autos_descubiertos: z.int().min(0).max(20).optional(),
+    areas_extra: z.array(area).max(20).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.tipo_cliente === "hogar" && data.dormitorios === undefined) ctx.addIssue({ code: "custom", message: "dormitorios is required for a home", path: ["dormitorios"] });
+    if (data.tipo_cliente === "hogar" && data.pies_cubiertos !== undefined) ctx.addIssue({ code: "custom", message: "a home is estimated from bedrooms", path: ["pies_cubiertos"] });
+    if (data.tipo_cliente === "empresa" && data.pies_cubiertos === undefined) ctx.addIssue({ code: "custom", message: "pies_cubiertos is required for a business", path: ["pies_cubiertos"] });
+    if (data.tipo_cliente === "empresa" && data.dormitorios !== undefined) ctx.addIssue({ code: "custom", message: "dormitorios is only for a home", path: ["dormitorios"] });
+  });
+
+const escalateSchema = z.strictObject({ motivo: text(300) });
+const replySchema = z.strictObject({ texto: text(4000) });
+
+const toQuoteInputs = (input: z.infer<typeof quoteSchema>) => ({
+  client_type: input.tipo_cliente === "hogar" ? "home" : "business",
+  bedrooms: input.dormitorios,
+  covered_sqft: input.pies_cubiertos,
+  covered_parking_cars: input.autos_techados,
+  uncovered_parking_cars: input.autos_descubiertos,
+  extra_areas: input.areas_extra?.map((item) => ({
+    covered: item.techada,
+    ...("pies" in item ? { sqft: item.pies } : {}),
+    ...("metros" in item ? { sqm: item.metros } : {}),
+    ...("pasos_largo" in item ? { paces_long: item.pasos_largo, paces_wide: item.pasos_ancho } : {}),
+  })),
+});
+
+const toSaveData = (input: z.infer<typeof saveDataSchema>) => ({
+  first_name: input.nombre,
+  last_name: input.apellido,
+  email: input.email,
+  language: input.idioma,
+  client_type: input.tipo_cliente === undefined ? undefined : input.tipo_cliente === "hogar" ? "home" : "business",
+  space_type: input.tipo_espacio,
+  address: input.direccion,
+  space_size: input.tamano,
+  zip: input.zip,
+});
+
+const withoutUndefined = (value: object) => Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined));
+
+type ToolContext = { conversationId: number; paused: boolean };
+
+const phoneForCustomer = (e164: string): string => parsePhoneNumberFromString(e164)?.formatNational() ?? e164;
+
+export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
+  /** Token to conversation. Nothing else identifies the customer: no tool takes an id. */
+  const authenticate = async (request: FastifyRequest, reply: FastifyReply): Promise<ToolContext | null> => {
+    const header = request.headers.authorization;
+    const token = typeof header === "string" && header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+    const verified = token ? await verifyConversationToken(deps.config.CONVERSATION_TOKEN_SECRET, token, deps.now()) : ({ ok: false } as const);
+    if (!verified.ok) {
+      await reply.code(401).send({ error: "invalid_token" });
+      return null;
+    }
+    const { rows } = await deps.db.query<{ result: { conversation_id: number; bot_paused: boolean; closed: boolean } | null }>(
+      "select api.tool_conversation($1, $2) as result",
+      [verified.claims.conversationId, verified.claims.brandId],
+    );
+    const found = rows[0].result;
+    if (!found) {
+      await reply.code(401).send({ error: "invalid_token" });
+      return null;
+    }
+    if (found.closed) {
+      await reply.code(409).send({ error: "conversation_closed" });
+      return null;
+    }
+    return { conversationId: found.conversation_id, paused: found.bot_paused };
+  };
+
+  const readBody = (request: FastifyRequest): unknown => {
+    try {
+      const raw = request.body as Buffer | undefined;
+      return raw && raw.length ? JSON.parse(raw.toString("utf8")) : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
+  /** Runs a database function and maps its errors; the message of a CX004 is for the model, any other is hidden. */
+  const run = async (reply: FastifyReply, work: () => Promise<unknown>): Promise<FastifyReply> => {
+    try {
+      const result = await work();
+      // A handler that already answered (a rejected reply) returns the reply itself.
+      return result === reply ? reply : reply.code(200).send(result);
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code === "CX004") return reply.code(400).send({ error: "invalid_input", message: (error as Error).message });
+      if (code === "CX002") return reply.code(409).send({ error: "invalid_state", message: (error as Error).message });
+      if (code === "CX003") return reply.code(409).send({ error: "hold_expired" });
+      throw error;
+    }
+  };
+
+  const tool = <T>(
+    method: "GET" | "POST",
+    url: string,
+    options: { schema?: z.ZodType<T>; pausable?: boolean },
+    handler: (context: ToolContext, input: T, reply: FastifyReply, request: FastifyRequest) => Promise<unknown>,
+  ) =>
+    app.route({
+      method,
+      url,
+      bodyLimit: 16_384,
+      handler: async (request, reply) => {
+        const context = await authenticate(request, reply);
+        if (!context) return reply;
+        // Pause applies to everything the bot does except reading its own card.
+        if (options.pausable !== false && context.paused) return reply.code(409).send({ error: "bot_paused" });
+
+        let input = undefined as T;
+        if (options.schema) {
+          const parsed = options.schema.safeParse(readBody(request));
+          if (!parsed.success) {
+            return reply.code(400).send({
+              error: "invalid_input",
+              fields: [...new Set(parsed.error.issues.map((issue) => issue.path.join(".") || issue.message))],
+            });
+          }
+          input = parsed.data;
+        } else if (request.url.includes("?") || Number(request.headers["content-length"] ?? 0) > 0) {
+          return reply.code(400).send({ error: "invalid_input" });
+        }
+        return run(reply, () => handler(context, input, reply, request));
+      },
+    });
+
+  tool("GET", "/tools/ficha", { pausable: false }, async ({ conversationId }) => {
+    const { rows } = await deps.db.query("select api.contact_card($1) as card", [conversationId]);
+    return rows[0].card;
+  });
+
+  tool("POST", "/tools/guardar_datos", { schema: saveDataSchema }, async ({ conversationId }, input) => {
+    const { rows } = await deps.db.query("select api.save_contact_data($1, $2::jsonb) as result", [
+      conversationId,
+      JSON.stringify(withoutUndefined(toSaveData(input))),
+    ]);
+    return rows[0].result;
+  });
+
+  tool("POST", "/tools/cotizar", { schema: quoteSchema }, async ({ conversationId }, input) => {
+    const { rows } = await deps.db.query("select api.create_quote($1, $2::jsonb) as quote", [
+      conversationId,
+      JSON.stringify(withoutUndefined(toQuoteInputs(input))),
+    ]);
+    const quote = rows[0].quote as Record<string, unknown>;
+    return {
+      version: quote.version,
+      subtotal: quote.subtotal,
+      descuento: quote.discount,
+      total: quote.total,
+      minimo_aplicado: quote.min_applied,
+      pies_cubiertos: quote.covered_sqft,
+      pies_descubiertos: quote.uncovered_sqft,
+      moneda: quote.currency,
+      descuento_pct: quote.discount_pct,
+      // The prices are examples until JM confirms them: the bot must not present them as final.
+      precios_confirmados: quote.price_confirmed,
+    };
+  });
+
+  tool("POST", "/tools/escalar", { schema: escalateSchema }, async ({ conversationId }, input) => {
+    const { rows } = await deps.db.query("select api.escalate($1, $2) as result", [conversationId, input.motivo]);
+    return rows[0].result;
+  });
+
+  tool("POST", "/tools/responder", { schema: replySchema }, async ({ conversationId }, input, reply) => {
+    const { rows } = await deps.db.query<{ facts: ReplyFacts }>("select api.reply_facts($1) as facts", [conversationId]);
+    const facts = rows[0].facts;
+    const review = reviewReply(input.texto, facts);
+    if (!review.ok) {
+      await deps.db.query("select api.record_reply_review($1, $2, $3)", [conversationId, review.reason, input.texto]);
+      return reply.code(422).send({ error: "reply_rejected", reason: review.reason, message: review.message });
+    }
+    // The history keeps the placeholder; only the message that leaves carries the number.
+    const outgoing = facts.phone_e164 ? input.texto.replaceAll(PHONE_PLACEHOLDER, phoneForCustomer(facts.phone_e164)) : input.texto;
+    const queued = await deps.db.query("select api.enqueue_outbound($1, $2, 'bot', $3) as id", [conversationId, input.texto, outgoing]);
+    return reply.code(200).send({ encolado: true, id: Number(queued.rows[0].id) });
+  });
+};

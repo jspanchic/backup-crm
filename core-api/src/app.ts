@@ -4,6 +4,7 @@ import type { Config } from "./config.ts";
 import type { Db } from "./db.ts";
 import type { OutboxDeps } from "./outbox.ts";
 import { adminProxy } from "./routes/admin-proxy.ts";
+import { toolRoutes } from "./routes/tools.ts";
 import { whatsappRoutes } from "./routes/whatsapp.ts";
 
 export type ProxyFetch = (
@@ -54,6 +55,7 @@ export const buildApp = (deps: Omit<AppDeps, "track" | "log"> & { logger?: boole
 
   app.get("/healthz", async () => ({ status: "ok" }));
   whatsappRoutes(app, full);
+  toolRoutes(app, full);
   // Without a development identity there is no panel yet: Access arrives with CRM-T3.
   if (deps.config.NODE_ENV !== "production" && deps.config.ADMIN_DEV_SUB) adminProxy(app, full);
 
