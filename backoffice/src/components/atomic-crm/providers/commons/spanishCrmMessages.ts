@@ -469,7 +469,24 @@ export const spanishCrmMessages: CrmMessages = {
         "Importación detenida. %{importCount} registros importados, con %{errorCount} errores",
       title: "Importar datos",
     },
-    header: { import_data: "Importar desde JSON" },
+    header: {
+      import_data: "Importar desde JSON",
+      show_test_leads: "Mostrar clientes de prueba",
+      hide_test_leads: "Ocultar clientes de prueba",
+    },
+    conversation: {
+      tab: "Conversación",
+      notes_tab: "Notas",
+      empty: "Todavía no hay mensajes con este cliente.",
+      error: "No se pudo cargar la conversación.",
+      sender: { client: "Cliente", bot: "Javier", human: "Equipo" },
+    },
+    contact_deals: {
+      title: "Oportunidades",
+      stage: "Etapa",
+      changed: "Etapa cambiada",
+      error: "No se pudo cambiar la etapa",
+    },
     search: {
       title: "Buscar",
       placeholder:

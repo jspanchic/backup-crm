@@ -31,6 +31,8 @@ import { ContactTasksList } from "./ContactTasksList";
 import type { Contact } from "../types";
 import { Avatar } from "./Avatar";
 import { ContactAside } from "./ContactAside";
+import { ContactConversation } from "./ContactConversation";
+import { isCoreApiProvider } from "../providers/core-api";
 import { MobileBackButton } from "../misc/MobileBackButton";
 
 export const ContactShow = (props: ShowBaseProps = {}) => {
@@ -70,7 +72,7 @@ const ContactShowErrorMobile = () => {
   );
 };
 
-const MOBILE_TABS = ["notes", "tasks", "details"];
+const MOBILE_TABS = ["notes", "tasks", "details", "conversation"];
 
 const ContactShowContentMobile = () => {
   const translate = useTranslate();
@@ -160,7 +162,14 @@ const ContactShowContentMobile = () => {
         </div>
 
         <Tabs key={initialTab} defaultValue={initialTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 h-10">
+          <TabsList
+            className={`grid w-full h-10 ${isCoreApiProvider() ? "grid-cols-4" : "grid-cols-3"}`}
+          >
+            {isCoreApiProvider() && (
+              <TabsTrigger value="conversation">
+                {translate("crm.conversation.tab")}
+              </TabsTrigger>
+            )}
             <TabsTrigger value="notes">
               {translate("resources.notes.name", { smart_count: 2 })}
             </TabsTrigger>
@@ -173,6 +182,12 @@ const ContactShowContentMobile = () => {
               {translate("crm.common.details")}
             </TabsTrigger>
           </TabsList>
+
+          {isCoreApiProvider() && (
+            <TabsContent value="conversation" className="mt-2">
+              <ContactConversation contact={record} />
+            </TabsContent>
+          )}
 
           <TabsContent value="notes" className="mt-2">
             <InfiniteListBase
@@ -266,6 +281,20 @@ const ContactShowContent = () => {
   const { record, isPending } = useShowContext<Contact>();
   if (isPending || !record) return null;
 
+  const notes = (
+    <InfiniteListBase
+      resource="contact_notes"
+      filter={{ contact_id: record.id }}
+      sort={{ field: "date", order: "DESC" }}
+      perPage={25}
+      disableSyncWithLocation
+      storeKey={false}
+      empty={<NoteCreate reference="contacts" showStatus className="mt-4" />}
+    >
+      <NotesIterator reference="contacts" showStatus />
+    </InfiniteListBase>
+  );
+
   return (
     <div className="mt-2 mb-2 flex gap-8">
       <div className="flex-1">
@@ -306,19 +335,24 @@ const ContactShowContent = () => {
                 </ReferenceField>
               </div>
             </div>
-            <InfiniteListBase
-              resource="contact_notes"
-              filter={{ contact_id: record.id }}
-              sort={{ field: "date", order: "DESC" }}
-              perPage={25}
-              disableSyncWithLocation
-              storeKey={false}
-              empty={
-                <NoteCreate reference="contacts" showStatus className="mt-4" />
-              }
-            >
-              <NotesIterator reference="contacts" showStatus />
-            </InfiniteListBase>
+            {isCoreApiProvider() ? (
+              <Tabs defaultValue="conversation" className="mt-4">
+                <TabsList>
+                  <TabsTrigger value="conversation">
+                    {translate("crm.conversation.tab")}
+                  </TabsTrigger>
+                  <TabsTrigger value="notes">
+                    {translate("crm.conversation.notes_tab")}
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="conversation" className="mt-4">
+                  <ContactConversation contact={record} />
+                </TabsContent>
+                <TabsContent value="notes">{notes}</TabsContent>
+              </Tabs>
+            ) : (
+              notes
+            )}
           </CardContent>
         </Card>
       </div>

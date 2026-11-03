@@ -24,10 +24,13 @@ export const ADMIN_RESOURCES: Record<string, Method[]> = {
   contacts_summary: ["GET"],
   activity_log: ["GET"],
   appointments_summary: ["GET"],
+  conversation_messages: ["GET"],
   "rpc/global_search": ["POST"],
 };
 
 const ALLOWED_PREFER = /^(return=(minimal|representation)|count=(exact|planned|estimated))(,\s*(return=(minimal|representation)|count=(exact|planned|estimated)))*$/;
+// getOne asks PostgREST for one object (not a list of one) with this media type; nothing else is passed on.
+const ALLOWED_ACCEPT = /^application\/(json|vnd\.pgrst\.object\+json)$/;
 const FORWARDED_RESPONSE_HEADERS = ["content-type", "content-range", "content-location"];
 const PANEL_TOKEN_TTL_SECONDS = 300;
 
@@ -99,7 +102,7 @@ export const adminProxy = (app: FastifyInstance, deps: AppDeps): void => {
       method: request.method,
       headers: {
         Authorization: `Bearer ${token}`,
-        Accept: "application/json",
+        Accept: typeof request.headers.accept === "string" && ALLOWED_ACCEPT.test(request.headers.accept) ? request.headers.accept : "application/json",
         ...(hasBody ? { "Content-Type": "application/json" } : {}),
         ...(typeof prefer === "string" ? { Prefer: prefer } : {}),
         ...(typeof request.headers.range === "string" ? { Range: request.headers.range } : {}),

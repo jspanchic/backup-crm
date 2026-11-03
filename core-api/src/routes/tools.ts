@@ -135,8 +135,9 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
   const run = async (reply: FastifyReply, work: () => Promise<unknown>): Promise<FastifyReply> => {
     try {
       const result = await work();
-      // A handler that already answered (a rejected reply) returns the reply itself.
-      return result === reply ? reply : reply.code(200).send(result);
+      // A handler that already answered (a rejected reply) has nothing left to send. It cannot be
+      // detected by comparing with `reply`: awaiting a reply, which is thenable, does not give it back.
+      return reply.sent ? reply : reply.code(200).send(result);
     } catch (error) {
       const code = (error as { code?: string }).code;
       if (code === "CX004") return reply.code(400).send({ error: "invalid_input", message: (error as Error).message });

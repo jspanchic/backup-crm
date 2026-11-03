@@ -14,6 +14,7 @@ import type { Deal, SearchResourceName, SearchResult } from "../../types";
 import type { CrmDataProvider } from "../supabase/dataProvider";
 import { searchDealCategories } from "../supabase/searchDealCategories";
 import { getCoreApiUrl, httpClient } from "./httpClient";
+import { excludeTestLeads } from "./testLeads";
 
 // Thin data provider over core-api. Every call goes to /admin/rest/*, which core-api forwards to
 // PostgREST with its own token and a closed list of resources. Nothing here imports Supabase.
@@ -50,7 +51,10 @@ const getDataProviderWithCustomMethods = () => {
     ...base,
     async getList(resource: string, params: GetListParams) {
       if (resource === "activity_log") {
-        const { data, total } = await base.getList("activity_log", params);
+        const { data, total } = await base.getList(
+          "activity_log",
+          excludeTestLeads(resource, params),
+        );
         return {
           data: data.map((row: any) => ({
             ...row,
@@ -62,7 +66,10 @@ const getDataProviderWithCustomMethods = () => {
           total,
         };
       }
-      return base.getList(VIEWS[resource] ?? resource, params);
+      return base.getList(
+        VIEWS[resource] ?? resource,
+        excludeTestLeads(resource, params),
+      );
     },
     async getOne(resource: string, params: any) {
       return base.getOne(VIEWS[resource] ?? resource, params);

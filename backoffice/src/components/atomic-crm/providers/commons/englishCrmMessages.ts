@@ -513,6 +513,21 @@ export const englishCrmMessages = {
     },
     header: {
       import_data: "Import from JSON",
+      show_test_leads: "Show test leads",
+      hide_test_leads: "Hide test leads",
+    },
+    conversation: {
+      tab: "Conversation",
+      notes_tab: "Notes",
+      empty: "There are no messages with this customer yet.",
+      error: "The conversation could not be loaded.",
+      sender: { client: "Customer", bot: "Javier", human: "Team" },
+    },
+    contact_deals: {
+      title: "Opportunities",
+      stage: "Stage",
+      changed: "Stage changed",
+      error: "The stage could not be changed",
     },
     search: {
       title: "Search",

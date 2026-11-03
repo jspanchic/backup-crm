@@ -20,6 +20,8 @@ import { useConfigurationContext } from "../root/ConfigurationContext";
 import { ImportPage } from "../misc/ImportPage";
 import { ChangelogPage } from "../misc/ChangelogPage";
 import { GlobalSearchButton } from "../search/GlobalSearchButton";
+import { isCoreApiProvider } from "../providers/core-api";
+import { TestLeadsMenuItem } from "../providers/core-api/TestLeadsMenuItem";
 
 const Header = () => {
   const { darkModeLogo, lightModeLogo, title } = useConfigurationContext();
@@ -124,6 +126,7 @@ const Header = () => {
                   <CanAccess resource="configuration" action="edit">
                     <SettingsMenu />
                   </CanAccess>
+                  {isCoreApiProvider() && <TestLeadsMenuItem />}
                   <ImportFromJsonMenuItem />
                   <ChangelogMenuItem />
                 </UserMenu>

@@ -59,6 +59,7 @@ describe("permissions", () => {
         contact_notes: crud,
         contacts: crud,
         contacts_summary: "SELECT",
+        conversation_messages: "SELECT",
         deal_followup_events: "INSERT,SELECT",
         deal_notes: crud,
         deals: crud,
@@ -171,7 +172,7 @@ describe("permissions", () => {
       expect((await call("contacts?limit=1", { token })).status).toBe(401);
     });
 
-    it.each(["contacts_summary", "companies_summary", "deals", "tasks", "activity_log", "appointments_summary"])(
+    it.each(["contacts_summary", "companies_summary", "deals", "tasks", "activity_log", "appointments_summary", "conversation_messages"])(
       "lets the panel read %s",
       async (resource) => {
         expect((await call(`${resource}?limit=1`)).status).toBeLessThan(300);

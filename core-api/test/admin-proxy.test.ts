@@ -60,6 +60,18 @@ describe("panel proxy", () => {
       expect((await call("DELETE", `contacts?id=eq.${contact.id}`)).statusCode).toBe(204);
     });
 
+    it("answers a getOne with one object, not a list of one", async () => {
+      const response = await call("GET", "sales?id=eq.1&select=id", { headers: { accept: "application/vnd.pgrst.object+json" } });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ id: 1 });
+    });
+
+    it("passes on no other media type than JSON", async () => {
+      const response = await call("GET", "sales?id=eq.1&select=id", { headers: { accept: "text/csv" } });
+      expect(response.headers["content-type"]).toContain("application/json");
+      expect(response.json()).toEqual([{ id: 1 }]);
+    });
+
     it("lets the panel read the appointments list", async () => {
       expect((await call("GET", "appointments_summary?limit=1")).statusCode).toBeLessThan(300);
     });
@@ -111,6 +123,8 @@ describe("panel proxy", () => {
       ["DELETE", "contacts_summary"],
       ["POST", "contacts_summary"],
       ["PATCH", "appointments_summary"],
+      ["POST", "conversation_messages"],
+      ["DELETE", "conversation_messages"],
       ["POST", "activity_log"],
       ["DELETE", "sales"],
       ["POST", "sales"],
@@ -130,6 +144,7 @@ describe("panel proxy", () => {
         "contact_notes",
         "contacts",
         "contacts_summary",
+        "conversation_messages",
         "deal_notes",
         "deals",
         "rpc/global_search",

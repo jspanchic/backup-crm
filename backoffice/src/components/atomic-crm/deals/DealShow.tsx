@@ -28,6 +28,7 @@ import { NotesIterator } from "../notes/NotesIterator";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Deal } from "../types";
 import { ContactList } from "./ContactList";
+import { DealStageSelect } from "./DealStageSelect";
 import {
   findDealLabel,
   formatDealCategories,
@@ -140,9 +141,13 @@ const DealShowContent = () => {
               <span className="text-xs text-muted-foreground tracking-wide">
                 {translate("resources.deals.fields.stage")}
               </span>
-              <span className="text-sm">
-                {findDealLabel(dealStages, record.stage)}
-              </span>
+              {record.archived_at ? (
+                <span className="text-sm">
+                  {findDealLabel(dealStages, record.stage)}
+                </span>
+              ) : (
+                <DealStageSelect deal={record} />
+              )}
             </div>
           </div>
 

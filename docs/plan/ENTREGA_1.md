@@ -1194,3 +1194,27 @@ Por eso **C1.2 y C1.3** (`confirmar` sin hold, y el mensaje de confirmación com
 - **El bot de guion no entiende lenguaje libre**: prueba el circuito (firma, herramientas, revisión, envío), no la conversación. Si Javier dice algo distinto, la demo con n8n puede dar ❌ en una comprobación que el guion hace pasar.
 - **Los supuestos sobre WAHA** (formato de `payload.id`, codificación de la firma, unidad del timestamp) siguen sin una captura real.
 - **Margen entre servicios, aviso mínimo, horizonte y disponibilidad del técnico** son valores de ejemplo, por confirmar con JM.
+
+
+## 23. Resultado de CRM-T8b (03/11/2026, `wip/crm-t8b`, sin publicar)
+
+**T8b = panel completo:** la ficha con la conversación, el cambio de etapa, las tareas y los clientes de prueba fuera de los reportes y del tablero.
+
+| Pieza | Estado |
+|---|---|
+| Conversación en la ficha | Pestaña "Conversación" (primera) junto a "Notas" en la ficha del contacto, también en el teléfono. Muestra los mensajes en orden, quién los dijo (Cliente, Javier, Equipo) y la hora; el `{{telefono}}` que deja el bot se muestra con el número real. Solo lectura: se contesta desde WhatsApp. Sale de la vista `conversation_messages`, que solo lee el panel. Un contacto conserva lo dicho mientras el número fue suyo, aunque después se reasigne |
+| Cambio de etapa | Selector de etapa en la ficha del contacto (sección "Oportunidades") y en la ventana de la oportunidad. La oportunidad pasa al final de la columna nueva, como al soltar una tarjeta. Si el servidor lo rechaza, no se avisa de un cambio que no ocurrió |
+| Tareas | Ya estaban en la ficha (crear, completar, editar, borrar). Se comprobó contra `core-api`: el responsable se completa solo y la tarea de un cliente de prueba nace marcada como prueba |
+| Clientes de prueba | Salen de las listas de contactos, oportunidades (tablero y archivadas), tareas, notas, actividad y citas, y de los gráficos del panel principal. Opción "Mostrar clientes de prueba" en el menú de usuario, que lo recuerda en este navegador. **La ficha de un cliente de prueba sí muestra lo suyo** (sus tareas, notas y oportunidades): lo que se oculta son las listas generales |
+| Base de datos | Migración `0014_panel.sql`: vista `conversation_messages`; columna `is_test` en tareas y notas, que se pone sola al crearlas y se propaga cuando un cliente pasa a ser de prueba; `is_test` en `contacts_summary` y en `activity_log`; la fila de configuración del panel (sin ella el panel no arrancaba en una base nueva) |
+| `core-api` | `conversation_messages` solo en lectura. El `getOne` del panel pide un objeto y el proxy ya no lo convierte en lista de uno (con eso, la ficha no cargaba) |
+| Arreglo de paso | Cuando `responder` rechazaba un texto, el servicio registraba un aviso "Reply was already sent" por cada rechazo. La respuesta salía bien; era ruido, ya no |
+| Pruebas | `core-api`: **603 pasan** (+10: vista, triggers, permisos, proxy). Panel: **343 pasan** (+27: conversación, selector de etapa, proveedor). Verificado en el navegador con la demo corriendo: conversación, cambio de etapa en la base, tablero sin pruebas, la opción del menú, tareas por `core-api` |
+
+**Límites que conozco**
+
+- **La marca de prueba nunca se quita sola.** Si alguien marcó a un cliente real, hay que cambiar `is_test` a mano; no hay botón en el panel.
+- **Las notas ya existentes** de un cliente de prueba se marcan al aplicar la migración solo si el cliente ya estaba marcado cuando se creó la nota o cuando pasó a prueba; no se recorre el historial anterior (en la base de demostración no había).
+- **El panel principal** muestra la guía "Qué sigue" mientras no haya notas reales (viene del upstream).
+- **La búsqueda global** sigue encontrando clientes de prueba: es lo esperado cuando alguien busca por nombre.
+- **La conversación carga las últimas 500 mensajes como máximo** y no se actualiza sola: se ve al abrir la ficha o al refrescar.

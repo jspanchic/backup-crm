@@ -520,6 +520,21 @@ export const frenchCrmMessages = {
     },
     header: {
       import_data: "Importer depuis JSON",
+      show_test_leads: "Afficher les clients de test",
+      hide_test_leads: "Masquer les clients de test",
+    },
+    conversation: {
+      tab: "Conversation",
+      notes_tab: "Notes",
+      empty: "Il n'y a pas encore de messages avec ce client.",
+      error: "La conversation n'a pas pu être chargée.",
+      sender: { client: "Client", bot: "Javier", human: "Équipe" },
+    },
+    contact_deals: {
+      title: "Opportunités",
+      stage: "Étape",
+      changed: "Étape modifiée",
+      error: "L'étape n'a pas pu être modifiée",
     },
     search: {
       title: "Rechercher",

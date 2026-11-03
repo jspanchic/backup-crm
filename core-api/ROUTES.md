@@ -17,7 +17,7 @@ registradas: agregar una ruta sin documentarla la hace fallar.
 | POST | `/tools/confirmar_titular` | Bot | Token. Solo mientras haya una verificación pendiente (más de 90 días de silencio). Si es otra persona, abre un contacto y una conversación nuevos |
 | POST | `/tools/responder` | Bot | Token. El texto se revisa contra la base antes de encolarlo |
 | GET | `/admin/session` | Panel | Solo con `ADMIN_DEV_SUB`. Devuelve nombre, id y si es administrador del usuario del panel; nada más |
-| GET, POST, PATCH, DELETE | `/admin/rest/*` | Panel | Solo con `ADMIN_DEV_SUB` (desarrollo). Lista cerrada de recursos y métodos. Producción: Cloudflare Access (CRM-T3) |
+| GET, POST, PATCH, DELETE | `/admin/rest/*` | Panel | Solo con `ADMIN_DEV_SUB` (desarrollo). Lista cerrada de recursos y métodos (`ADMIN_RESOURCES`; `conversation_messages` y `appointments_summary` son solo lectura). Del encabezado `Accept` solo pasa `application/json` y `application/vnd.pgrst.object+json` (el `getOne` del panel). Producción: Cloudflare Access (CRM-T3) |
 
 Todas las rutas `/tools/*`: cuerpo de máximo 16 KB; con la conversación pausada responden `409 bot_paused` (menos `ficha`).
 
