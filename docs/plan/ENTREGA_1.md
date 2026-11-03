@@ -1,7 +1,7 @@
 # Plan de la Entrega 1 (demo funcional en local)
 
 - **Fecha:** lunes 02/11/2026
-- **Estado:** APROBADO el 02/11/2026 con los ajustes de la sección 13. CRM-T0b, CRM-T4, CRM-T5 y CRM-T6 están hechos en ramas `wip/`, sin publicar. Lo demás no ha empezado.
+- **Estado:** APROBADO el 02/11/2026 con los ajustes de la sección 13. CRM-T0b, T4, T5, T6, T9, T10 y T8a están hechos en ramas `wip/` encadenadas, sin publicar. Falta CRM-T7a (n8n local), CRM-T11 (simulador y guion de la demo) y publicar.
 - **Alcance:** todo en local, sin VPS, sin WAHA real y sin Joel. Decisión tomada: opción C ([ADR-001](../decisiones/ADR-001-proveedor-datos.md)) y destino en el monorepo de `origin/f1-b0-repo-base`.
 - **Convención:** nombres de tablas, columnas, código y commits en inglés. Este documento y `docs/` en español.
 - **Citas:** `[ARQ]`, `[BASE]`, `[SM]` y `[GRAB]` son las claves definidas al inicio de la auditoría. Lo no verificado se marca **SUPUESTO**.
