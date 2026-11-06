@@ -7,6 +7,7 @@ import atomicDarkLogo from "./logos/logo_atomic_crm_dark.svg";
 import atomicLightLogo from "./logos/logo_atomic_crm_light.svg";
 import { localizeConfiguration } from "./localizeConfiguration";
 import { adaptLegacyConfiguration } from "./adaptLegacyConfiguration";
+import { isPresentationMode, PRESENTATION_DEAL_STAGES } from "../presentation/presentationMode";
 
 export const CONFIGURATION_STORE_KEY = "app.configuration";
 
@@ -50,6 +51,8 @@ export const useConfigurationContext = (localize = true) => {
       merged.lightModeLogo?.includes("logo_atomic_crm_light")
     )
       merged.lightModeLogo = defaultConfiguration.lightModeLogo;
+    // Presentation mode: five stages in Spanish. Deals in a stage that is not listed fall into the first column.
+    if (isPresentationMode()) merged.dealStages = PRESENTATION_DEAL_STAGES;
     return localize && (locale === "es" || locale.startsWith("es-"))
       ? localizeConfiguration(merged)
       : merged;

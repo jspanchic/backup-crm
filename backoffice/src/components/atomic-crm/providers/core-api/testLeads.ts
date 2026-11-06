@@ -1,6 +1,8 @@
 import { useSyncExternalStore } from "react";
 import type { GetListParams } from "ra-core";
 
+import { isPresentationMode } from "../../presentation/presentationMode";
+
 // Test leads ("Prueba X") stay out of the lists, the board and the dashboard unless the user asks to see
 // them. The database marks the rows (is_test); this decides whether the panel asks for them.
 
@@ -27,6 +29,8 @@ let memory = false;
 
 /** Whether the user asked to see test leads. The choice lives in this browser. */
 export const getShowTestLeads = (): boolean => {
+  // The presentation data is all marked as test: it has to be shown.
+  if (isPresentationMode()) return true;
   try {
     return localStorage.getItem(STORAGE_KEY) === "1";
   } catch {

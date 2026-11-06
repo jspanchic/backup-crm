@@ -1,3 +1,6 @@
+import { QueryClient } from "@tanstack/react-query";
+
+import { isPresentationMode } from "@/components/atomic-crm/presentation/presentationMode";
 import { CRM } from "@/components/atomic-crm/root/CRM";
 import {
   getAuthProvider as getCoreApiAuthProvider,
@@ -50,6 +53,18 @@ const coreApiProviders = useCoreApi
     }
   : {};
 
-const App = () => <CRM {...coreApiProviders} />;
+// Presentation mode: what happens behind the panel (a message, a quote, a task) shows up on its own, without a refresh.
+const presentationQueryClient = isPresentationMode()
+  ? new QueryClient({
+      defaultOptions: { queries: { refetchInterval: 3000, staleTime: 0 } },
+    })
+  : undefined;
+
+const App = () => (
+  <CRM
+    {...coreApiProviders}
+    {...(presentationQueryClient ? { queryClient: presentationQueryClient } : {})}
+  />
+);
 
 export default App;
