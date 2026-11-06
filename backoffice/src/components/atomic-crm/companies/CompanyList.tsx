@@ -9,6 +9,8 @@ import { DataImportButton } from "../dataImport/DataImportButton";
 import { TopToolbar } from "../layout/TopToolbar";
 import { CompanyEmpty } from "./CompanyEmpty";
 import { CompanyListFilter } from "./CompanyListFilter";
+import { CompaniesTable } from "../presentation/ListTables";
+import { isPresentationMode } from "../presentation/presentationMode";
 import { ImageList } from "./GridList";
 
 export const CompanyList = () => {
@@ -38,7 +40,7 @@ const CompanyListLayout = () => {
     <div className="w-full flex flex-row gap-8">
       <CompanyListFilter />
       <div className="flex flex-col flex-1 gap-4">
-        <ImageList />
+        {isPresentationMode() ? <CompaniesTable /> : <ImageList />}
       </div>
     </div>
   );

@@ -34,6 +34,8 @@ import { TopToolbar } from "../layout/TopToolbar";
 import { InfinitePagination } from "../misc/InfinitePagination";
 import MobileHeader from "../layout/MobileHeader";
 import { MobileContent } from "../layout/MobileContent";
+import { ContactsTable } from "../presentation/ListTables";
+import { isPresentationMode } from "../presentation/presentationMode";
 
 export const ContactList = () => {
   const { identity } = useGetIdentity();
@@ -66,9 +68,13 @@ const ContactListLayoutDesktop = () => {
     <div className="flex flex-row gap-8">
       <ContactListFilter />
       <div className="w-full flex flex-col gap-4">
-        <Card className="py-0">
-          <ContactListContent />
-        </Card>
+        {isPresentationMode() ? (
+          <ContactsTable />
+        ) : (
+          <Card className="py-0">
+            <ContactListContent />
+          </Card>
+        )}
       </div>
       <BulkActionsToolbar>
         <ContactBulkActionButtons />

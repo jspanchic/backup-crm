@@ -1,4 +1,5 @@
 import { Droppable } from "@hello-pangea/dnd";
+import { useListContext } from "ra-core";
 
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Deal } from "../types";
@@ -16,6 +17,9 @@ export const DealColumn = ({
 }) => {
   const totalAmount = deals.reduce((sum, deal) => sum + deal.amount, 0);
   const { dealStages, currency } = useConfigurationContext();
+  const { data: allDeals = [] } = useListContext<Deal>();
+  const everything = allDeals.reduce((sum, deal) => sum + (Number(deal.amount) || 0), 0);
+  const share = everything ? Math.round((totalAmount / everything) * 100) : 0;
   return (
     <div className="flex-1 pb-8">
       <div className="flex flex-col items-center">
@@ -40,6 +44,15 @@ export const DealColumn = ({
                 minimumSignificantDigits: 3,
               })}
         </p>
+        {isPresentationMode() && (
+          <div
+            className="mt-1.5 h-1 w-3/4 overflow-hidden rounded-full bg-muted"
+            title={`${share}% del monto`}
+            aria-label={`${share}% del monto`}
+          >
+            <div className="h-full rounded-full bg-primary" style={{ width: `${share}%` }} />
+          </div>
+        )}
       </div>
       <Droppable droppableId={stage}>
         {(droppableProvided, snapshot) => (

@@ -8,6 +8,7 @@ import { CompanyAvatar } from "../companies/CompanyAvatar";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Deal } from "../types";
 import { formatUsd } from "../presentation/money";
+import { PresentationDealCard } from "../presentation/PresentationDealCard";
 import { isPresentationMode } from "../presentation/presentationMode";
 import { formatDealCategories } from "./dealUtils";
 
@@ -51,11 +52,16 @@ export const DealCardContent = ({
       <RecordContextProvider value={deal}>
         <Card
           className={`py-3 transition-all duration-200 ${
+            isPresentationMode() ? "border border-border/70 bg-card" : ""
+          } ${
             snapshot?.isDragging
               ? "opacity-90 transform rotate-1 shadow-lg"
               : "shadow-sm hover:shadow-md"
           }`}
         >
+          {isPresentationMode() ? (
+            <PresentationDealCard deal={deal} />
+          ) : (
           <CardContent className="px-3 flex flex-col">
             <div className="flex-1 flex">
               <p className="flex-1 text-sm font-medium mb-2">
@@ -100,6 +106,7 @@ export const DealCardContent = ({
               {formatDealCategories(dealCategories, deal.categories)}
             </p>
           </CardContent>
+          )}
         </Card>
       </RecordContextProvider>
     </div>
