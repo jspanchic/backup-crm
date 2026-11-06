@@ -198,3 +198,31 @@ body {
     overscroll-behavior-y: none;
   }
 }
+
+/* Presentation mode (data-presentation on <html>): Salvionix blue #0098c4 as the main color. Not applied otherwise. */
+:root[data-presentation="true"] {
+  --background: #f3f8fa;
+  --primary: #0098c4;
+  --primary-foreground: #ffffff;
+  --secondary: #e4f3f8;
+  --secondary-foreground: #0f3a4a;
+  --accent: #d9f0f7;
+  --accent-foreground: #0a3d4f;
+  --ring: #0098c4;
+  --chart-1: #0098c4;
+  --sidebar-primary: #0098c4;
+  --sidebar-accent: #d9f0f7;
+  --sidebar-accent-foreground: #0a3d4f;
+  --sidebar-ring: #0098c4;
+}
+
+:root[data-presentation="true"].dark {
+  --primary: #0098c4;
+  --primary-foreground: #ffffff;
+  --accent: #123a4c;
+  --ring: #0098c4;
+  --chart-1: #0098c4;
+  --sidebar-primary: #0098c4;
+  --sidebar-accent: #123a4c;
+  --sidebar-ring: #0098c4;
+}

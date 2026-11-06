@@ -7,6 +7,8 @@ import { raSupabaseFrenchMessages } from "ra-supabase-language-french";
 import { englishCrmMessages } from "./englishCrmMessages";
 import { frenchCrmMessages } from "./frenchCrmMessages";
 import { spanishCrmMessages } from "./spanishCrmMessages";
+import { isPresentationMode } from "../../presentation/presentationMode";
+import { PRESENTATION_MESSAGES_ES } from "../../presentation/presentationMessages";
 import {
   spanishRaMessages,
   spanishSupabaseMessages,
@@ -77,6 +79,8 @@ const spanishCatalog = mergeTranslations(
       },
     },
   },
+  // Presentation mode: the words a person says out loud ("negocios", "agenda").
+  isPresentationMode() ? PRESENTATION_MESSAGES_ES : {},
 );
 
 // Spanish is the default for Salvionix; users can still choose another

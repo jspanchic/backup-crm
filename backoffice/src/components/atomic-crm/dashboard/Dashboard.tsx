@@ -1,5 +1,7 @@
 import { useGetList } from "ra-core";
 
+import { PresentationDashboard } from "../presentation/PresentationDashboard";
+import { isPresentationMode } from "../presentation/presentationMode";
 import { isCoreApiProvider } from "../providers/core-api";
 import type { Contact, ContactNote } from "../types";
 import { DashboardActivityLog } from "./DashboardActivityLog";
@@ -44,6 +46,8 @@ export const Dashboard = () => {
   if (!totalContactNotes && !isCoreApiProvider()) {
     return <DashboardStepper step={2} contactId={dataContact?.[0]?.id} />;
   }
+
+  if (isPresentationMode()) return <PresentationDashboard />;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mt-1">

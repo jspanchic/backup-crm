@@ -23,6 +23,7 @@ import { GlobalSearchButton } from "../search/GlobalSearchButton";
 import { isCoreApiProvider } from "../providers/core-api";
 import { TestLeadsMenuItem } from "../providers/core-api/TestLeadsMenuItem";
 import { isPresentationMode } from "../presentation/presentationMode";
+import { Wordmark } from "../presentation/Wordmark";
 
 const Header = () => {
   const { darkModeLogo, lightModeLogo, title } = useConfigurationContext();
@@ -54,19 +55,25 @@ const Header = () => {
                 to="/"
                 className="flex shrink-0 items-center gap-2.5 text-[#f2fbf8] no-underline"
               >
-                <img
-                  className="[.light_&]:hidden h-8 w-8 object-contain"
-                  src={darkModeLogo}
-                  alt={title}
-                />
-                <img
-                  className="[.dark_&]:hidden h-8 w-8 object-contain"
-                  src={lightModeLogo}
-                  alt={title}
-                />
-                <h1 className="hidden whitespace-nowrap text-base font-bold tracking-tight xl:block">
-                  {title}
-                </h1>
+                {isPresentationMode() ? (
+                  <Wordmark />
+                ) : (
+                  <>
+                    <img
+                      className="[.light_&]:hidden h-8 w-8 object-contain"
+                      src={darkModeLogo}
+                      alt={title}
+                    />
+                    <img
+                      className="[.dark_&]:hidden h-8 w-8 object-contain"
+                      src={lightModeLogo}
+                      alt={title}
+                    />
+                    <h1 className="hidden whitespace-nowrap text-base font-bold tracking-tight xl:block">
+                      {title}
+                    </h1>
+                  </>
+                )}
               </Link>
               <div className="min-w-0">
                 <nav
@@ -156,7 +163,9 @@ const NavigationTab = ({
     aria-current={isActive ? "page" : undefined}
     className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors lg:px-3 ${
       isActive
-        ? "bg-[#2fc9a0]/15 text-[#65e5c2]"
+        ? isPresentationMode()
+          ? "bg-[#0098c4]/20 text-[#5cc9e8]"
+          : "bg-[#2fc9a0]/15 text-[#65e5c2]"
         : "text-[#a9bdc0] hover:bg-[#11263b] hover:text-[#f2fbf8]"
     }`}
   >

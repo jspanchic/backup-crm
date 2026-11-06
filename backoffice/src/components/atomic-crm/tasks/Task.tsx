@@ -24,6 +24,7 @@ import type { Contact, Task as TData } from "../types";
 import { TaskEdit } from "./TaskEdit";
 import { TaskEditSheet } from "./TaskEditSheet";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { isPresentationMode } from "../presentation/presentationMode";
 
 export const Task = ({
   task,
@@ -124,7 +125,23 @@ export const Task = ({
             <div className="text-sm text-muted-foreground">
               {translate("resources.tasks.fields.due_short")}
               &nbsp;
-              <DateField source="due_date" record={task} showDate showTime />
+              <DateField
+                source="due_date"
+                record={task}
+                showDate
+                showTime
+                {...(isPresentationMode()
+                  ? {
+                      locales: "es",
+                      options: {
+                        day: "numeric",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      },
+                    }
+                  : {})}
+              />
               {showContact && (
                 <ReferenceField<TData, Contact>
                   source="contact_id"

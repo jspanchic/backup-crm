@@ -2,6 +2,10 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App.tsx";
+import { isPresentationMode } from "./components/atomic-crm/presentation/presentationMode";
+
+// Presentation mode paints the Salvionix blue (see index.css); off, nothing changes.
+if (isPresentationMode()) document.documentElement.dataset.presentation = "true";
 
 // After a new deploy, the service worker may replace its pre-cache while
 // the page still holds old chunk references. A reload picks up the new
