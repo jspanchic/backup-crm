@@ -3,7 +3,7 @@
  * changing the catalog the product uses.
  */
 export const PRESENTATION_MESSAGES_ES = {
-  ra: { page: { dashboard: "Inicio" } },
+  ra: { page: { dashboard: "Inicio" }, action: { add_filter: "Filtros" } },
   resources: {
     companies: { name: "Cliente comercial |||| Clientes comerciales" },
     appointments: { name: "Agenda |||| Agenda" },
