@@ -17,14 +17,18 @@ begin
   for r in
     select * from (values
       -- first, last, city, state, phone, company, sector, status, stage, client_type, space, deal name, amount, days ago, size, address
-      ('María',   'Fernández', 'Orlando', 'FL', '+14075550111', 'Café Aroma Orlando',      'food',   'warm', 'proposal-sent', 'business', 'restaurant_kitchen', 'Desinfección de cocina y comedor',   780,  4, '1.800 pies cuadrados', '215 Orange Ave, Orlando, FL 32801', '32801'),
-      ('Daniel',  'Ortiz',     'Orlando', 'FL', '+14075550112', null,                      null,     'cold', 'opportunity',   'home',     'home',               'Casa de 4 dormitorios',               null, 1, null,                   null,                                '32819'),
-      ('Laura',   'Bennett',   'Chicago', 'IL', '+13125550113', 'Lakeview Dental Group',   'health', 'hot',  'assessment',    'business', 'clinic',             'Clínica dental, dos pisos',          1450,  6, '3.200 pies cuadrados', '3150 N Broadway, Chicago, IL 60657', '60657'),
-      ('Marcus',  'Johnson',   'Chicago', 'IL', '+13125550114', 'Windy City Fitness',      'fitness','hot',  'won',           'business', 'gym',                'Gimnasio, 6.500 pies',               2100,  6, '6.500 pies cuadrados', '910 W Randolph St, Chicago, IL 60607', '60607'),
-      ('Sofía',   'Ramírez',   'Orlando', 'FL', '+14075550115', null,                      null,     'cold', 'opportunity',   'home',     'home',               'Departamento de 2 dormitorios',       null, 0, null,                   null,                                '32806'),
-      ('Kevin',   'O''Brien',  'Chicago', 'IL', '+13125550116', 'O''Brien & Hale Offices', 'office', 'cold', 'lost',          'business', 'office_warehouse',   'Oficinas, 4.000 pies',                950,  6, '4.000 pies cuadrados', '233 S Wacker Dr, Chicago, IL 60606', '60606'),
-      ('Patricia','Nguyen',    'Orlando', 'FL', '+14075550117', 'Little Stars Daycare',    'school', 'warm', 'proposal-sent', 'business', 'school_daycare',     'Guardería, 2.400 pies',              1200,  3, '2.400 pies cuadrados', '4800 S Kirkman Rd, Orlando, FL 32811', '32811'),
-      ('Andrés',  'Salazar',   'Chicago', 'IL', '+13125550118', null,                      null,     'warm', 'assessment',    'home',     'home',               'Casa de 3 dormitorios',               380,  5, '1.900 pies cuadrados', '1420 W Fullerton Ave, Chicago, IL 60614', '60614')
+      ('María',   'Fernández', 'Orlando', 'FL', '+14075550111', 'Café Aroma Orlando',      'food',   'warm', 'proposal-sent', 'business', 'restaurant_kitchen', 'Café Aroma Orlando – Cocina y comedor, 1.800 pies',     780,  4, '1.800 pies cuadrados', '215 Orange Ave, Orlando, FL 32801', '32801'),
+      ('Daniel',  'Ortiz',     'Orlando', 'FL', '+14075550112', null,                      null,     'cold', 'opportunity',   'home',     'home',               'Daniel Ortiz – Casa de 4 dormitorios, 2.600 pies',     null, 1, '2.600 pies cuadrados', null,                                '32819'),
+      ('Laura',   'Bennett',   'Chicago', 'IL', '+13125550113', 'Lakeview Dental Group',   'health', 'hot',  'assessment',    'business', 'clinic',             'Lakeview Dental Group – Clínica, 3.200 pies',          1450,  6, '3.200 pies cuadrados', '3150 N Broadway, Chicago, IL 60657', '60657'),
+      ('Marcus',  'Johnson',   'Chicago', 'IL', '+13125550114', 'Windy City Fitness',      'fitness','hot',  'won',           'business', 'gym',                'Windy City Fitness – Gimnasio, 6.500 pies',            2100, 12, '6.500 pies cuadrados', '910 W Randolph St, Chicago, IL 60607', '60607'),
+      ('Sofía',   'Ramírez',   'Orlando', 'FL', '+14075550115', null,                      null,     'cold', 'opportunity',   'home',     'home',               'Sofía Ramírez – Departamento de 2 dormitorios, 1.100 pies', null, 0, '1.100 pies cuadrados', null,                           '32806'),
+      ('Kevin',   'O''Brien',  'Chicago', 'IL', '+13125550116', 'O''Brien & Hale Offices', 'office', 'cold', 'lost',          'business', 'office_warehouse',   'O''Brien & Hale Offices – Oficinas, 4.000 pies',        950, 13, '4.000 pies cuadrados', '233 S Wacker Dr, Chicago, IL 60606', '60606'),
+      ('Patricia','Nguyen',    'Orlando', 'FL', '+14075550117', 'Little Stars Daycare',    'school', 'warm', 'proposal-sent', 'business', 'school_daycare',     'Little Stars Daycare – Guardería, 2.400 pies',         1200,  3, '2.400 pies cuadrados', '4800 S Kirkman Rd, Orlando, FL 32811', '32811'),
+      ('Andrés',  'Salazar',   'Chicago', 'IL', '+13125550118', null,                      null,     'warm', 'assessment',    'home',     'home',               'Andrés Salazar – Casa de 3 dormitorios, 1.900 pies',    380,  9, '1.900 pies cuadrados', '1420 W Fullerton Ave, Chicago, IL 60614', '60614'),
+      ('Carla',   'Mendoza',   'Orlando', 'FL', '+14075550119', null,                      null,     'cold', 'opportunity',   'home',     'home',               'Carla Mendoza – Departamento de 3 dormitorios, 1.400 pies', null, 2, '1.400 pies cuadrados', null,                           '32804'),
+      ('Jason',   'Reed',      'Chicago', 'IL', '+13125550120', null,                      null,     'warm', 'proposal-sent', 'home',     'home',               'Jason Reed – Casa de 2 dormitorios, 1.500 pies',        320,  7, '1.500 pies cuadrados', '2210 N Clark St, Chicago, IL 60614', '60614'),
+      ('Elena',   'Torres',    'Orlando', 'FL', '+14075550121', null,                      null,     'hot',  'won',           'home',     'home',               'Elena Torres – Casa de 3 dormitorios, 2.000 pies',      400, 10, '2.000 pies cuadrados', '640 Lake Ave, Orlando, FL 32801', '32801'),
+      ('Tom',     'Alvarez',   'Chicago', 'IL', '+13125550122', null,                      null,     'cold', 'opportunity',   'home',     'home',               'Tom Alvarez – Casa de 4 dormitorios, 2.800 pies',      null,  5, '2.800 pies cuadrados', null,                                '60618')
     ) as t(first_name, last_name, city, state, phone, company_name, sector, status, stage, client_type, space, deal_name, amount, days_ago, size, address, zip)
   loop
     v_company := null;
@@ -83,6 +87,18 @@ begin
     elsif r.first_name = 'Andrés' then
       insert into public.tasks (contact_id, type, text, due_date, sales_id, is_test)
       values (v_contact, 'call', 'Llamar a Andrés antes de la evaluación', now() + interval '4 days', v_brand.default_sales_id, true);
+    elsif r.first_name = 'Carla' then
+      insert into public.tasks (contact_id, type, text, due_date, sales_id, is_test)
+      values (v_contact, 'call', 'Llamar a Carla para confirmar el tamaño del departamento', now() + interval '1 day', v_brand.default_sales_id, true);
+    elsif r.first_name = 'Tom' then
+      insert into public.tasks (contact_id, type, text, due_date, sales_id, is_test)
+      values (v_contact, 'whatsapp', 'Escribir a Tom para agendar la evaluación', now() - interval '1 day', v_brand.default_sales_id, true);
+    elsif r.first_name = 'Jason' then
+      insert into public.tasks (contact_id, type, text, due_date, sales_id, is_test)
+      values (v_contact, 'follow-up', 'Dar seguimiento a la cotización de Jason', now() + interval '2 days', v_brand.default_sales_id, true);
+    elsif r.first_name = 'Sofía' then
+      insert into public.tasks (contact_id, type, text, due_date, sales_id, is_test)
+      values (v_contact, 'whatsapp', 'Pedir a Sofía una foto de las áreas a tratar', now() + interval '3 hours', v_brand.default_sales_id, true);
     elsif r.first_name = 'Daniel' then
       insert into public.tasks (contact_id, type, text, due_date, sales_id, is_test)
       values (v_contact, 'whatsapp', 'Pedir a Daniel los metros de la casa', now() - interval '2 hours', v_brand.default_sales_id, true);

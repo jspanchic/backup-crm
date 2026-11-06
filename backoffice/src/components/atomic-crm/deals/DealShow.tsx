@@ -29,6 +29,8 @@ import { isCoreApiProvider } from "../providers/core-api";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Deal } from "../types";
 import { ContactList } from "./ContactList";
+import { formatUsd } from "../presentation/money";
+import { isPresentationMode } from "../presentation/presentationMode";
 import { DealDocuments } from "./DealDocuments";
 import { DealStageSelect } from "./DealStageSelect";
 import {
@@ -123,13 +125,15 @@ const DealShowContent = () => {
               </span>
               <span className="text-sm">
                 {/* A deal that was not quoted yet has no amount. */}
-                {(record.amount ?? 0).toLocaleString("en-US", {
-                  notation: "compact",
-                  style: "currency",
-                  currency,
-                  currencyDisplay: "narrowSymbol",
-                  minimumSignificantDigits: 3,
-                })}
+                {isPresentationMode()
+                  ? formatUsd(record.amount)
+                  : (record.amount ?? 0).toLocaleString("en-US", {
+                      notation: "compact",
+                      style: "currency",
+                      currency,
+                      currencyDisplay: "narrowSymbol",
+                      minimumSignificantDigits: 3,
+                    })}
               </span>
             </div>
 

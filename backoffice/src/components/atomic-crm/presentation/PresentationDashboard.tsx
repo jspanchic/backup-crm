@@ -8,15 +8,10 @@ import { TasksListContent } from "../tasks/TasksListContent";
 import { AddTask } from "../tasks/AddTask";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Deal } from "../types";
+import { formatUsd as money } from "./money";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-const money = (value: number) =>
-  new Intl.NumberFormat("es-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(value);
 
 const shortDate = (value: string) =>
   new Intl.DateTimeFormat("es", { day: "numeric", month: "short" }).format(

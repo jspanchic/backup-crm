@@ -7,6 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { CompanyAvatar } from "../companies/CompanyAvatar";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Deal } from "../types";
+import { formatUsd } from "../presentation/money";
+import { isPresentationMode } from "../presentation/presentationMode";
 import { formatDealCategories } from "./dealUtils";
 
 export const DealCard = ({ deal, index }: { deal: Deal; index: number }) => {
@@ -57,7 +59,7 @@ export const DealCardContent = ({
           <CardContent className="px-3 flex flex-col">
             <div className="flex-1 flex">
               <p className="flex-1 text-sm font-medium mb-2">
-                {deal.company_id != null && (
+                {!isPresentationMode() && deal.company_id != null && (
                   <>
                     <ReferenceField
                       source="company_id"
@@ -78,16 +80,22 @@ export const DealCardContent = ({
               </ReferenceField>
             </div>
             <p className="text-xs text-muted-foreground">
-              <NumberField
-                source="amount"
-                options={{
-                  notation: "compact",
-                  style: "currency",
-                  currency,
-                  currencyDisplay: "narrowSymbol",
-                  minimumSignificantDigits: 3,
-                }}
-              />
+              {isPresentationMode() ? (
+                deal.amount ? (
+                  formatUsd(deal.amount)
+                ) : null
+              ) : (
+                <NumberField
+                  source="amount"
+                  options={{
+                    notation: "compact",
+                    style: "currency",
+                    currency,
+                    currencyDisplay: "narrowSymbol",
+                    minimumSignificantDigits: 3,
+                  }}
+                />
+              )}
               {deal.categories?.length ? ", " : ""}
               {formatDealCategories(dealCategories, deal.categories)}
             </p>

@@ -199,8 +199,9 @@ body {
   }
 }
 
-/* Presentation mode (data-presentation on <html>): Salvionix blue #0098c4 as the main color. Not applied otherwise. */
-:root[data-presentation="true"] {
+/* Presentation mode (data-presentation on <html>): Salvionix blue #0098c4 as the main color. Not applied otherwise.
+   Light and dark are separate on purpose: a light value must never win over the dark theme. */
+:root[data-presentation="true"]:not(.dark) {
   --background: #f3f8fa;
   --primary: #0098c4;
   --primary-foreground: #ffffff;
@@ -217,12 +218,14 @@ body {
 }
 
 :root[data-presentation="true"].dark {
-  --primary: #0098c4;
-  --primary-foreground: #ffffff;
+  --primary: #1fb1dc;
+  --primary-foreground: #04202b;
   --accent: #123a4c;
-  --ring: #0098c4;
-  --chart-1: #0098c4;
-  --sidebar-primary: #0098c4;
+  --accent-foreground: #f2fbf8;
+  --ring: #1fb1dc;
+  --chart-1: #1fb1dc;
+  --sidebar-primary: #1fb1dc;
   --sidebar-accent: #123a4c;
-  --sidebar-ring: #0098c4;
+  --sidebar-accent-foreground: #f2fbf8;
+  --sidebar-ring: #1fb1dc;
 }

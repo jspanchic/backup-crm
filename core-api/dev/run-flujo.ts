@@ -214,9 +214,9 @@ try {
     const renamed = await fetch(`${coreApiUrl}/admin/rest/deals?id=eq.${now.deal_id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json", prefer: "return=minimal" },
-      body: JSON.stringify({ name: "Restaurante Rosa Delgado - Orlando" }),
+      body: JSON.stringify({ name: "Rosa Delgado – Restaurante, 2.400 pies" }),
     });
-    check(renamed.status === 204, "El negocio quedó con nombre: «Restaurante Rosa Delgado - Orlando»");
+    check(renamed.status === 204, "El negocio quedó con nombre: «Rosa Delgado – Restaurante, 2.400 pies»");
     console.log("   👀 En el panel: abre el negocio; la ficha ya tiene nombre, ciudad, tipo de lugar y tamaño.");
   }
   if (now && step === 3 && result.quote) {
