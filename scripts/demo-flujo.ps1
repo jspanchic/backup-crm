@@ -3,10 +3,12 @@
   Live flow of the presentation, step by step, pausing for Enter before each one. Run it with the presentation up
   (INICIAR-PRESENTACION.cmd). It talks only to core-api and the bot's tools; no n8n, no Anthropic, no VPS.
   Each step prints what happened and what to look at in the panel.
+.PARAMETER Detalle
+  Detailed mode: shows each call of the bot (method, path, body sent and answer), with secrets hidden as ***.
 .PARAMETER Desde
   Start at this step (1 to 4). The steps after the first need the client that step 1 creates.
 #>
-param([ValidateRange(1, 4)][int]$Desde = 1)
+param([ValidateRange(1, 4)][int]$Desde = 1, [switch]$Detalle)
 $ErrorActionPreference = 'Continue'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 
@@ -44,7 +46,7 @@ foreach ($step in $steps) {
   Write-Host "  Paso $($step.n) de 4 - $($step.title)" -ForegroundColor Yellow
   Write-Host "  $($step.next)"
   [void](Read-Host '  Presiona Enter para ejecutarlo')
-  & $npm run --silent flujo -- $step.n
+  if ($Detalle) { & $npm run --silent flujo -- $step.n --detalle } else { & $npm run --silent flujo -- $step.n }
   if ($LASTEXITCODE -ne 0) {
     Write-Host ''
     Write-Host "  El paso $($step.n) fallo. Lee los mensajes de arriba." -ForegroundColor Red

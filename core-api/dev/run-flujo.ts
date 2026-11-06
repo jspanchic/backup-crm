@@ -24,6 +24,36 @@ const need = (name: string): string => {
   return value;
 };
 
+// Detailed mode (FLUJO-PRESENTACION.cmd detalle): shows every call with its body and answer. Authentication headers,
+// signatures, tokens and any value of the environment are never printed: they come out as ***.
+const verbose = process.argv.includes("--detalle");
+const ESC = String.fromCharCode(27);
+const paint = (code: string) => `${ESC}[${code}m`;
+const COLOR = { reset: paint("0"), send: paint("36"), answer: paint("32"), script: paint("35"), bad: paint("31") };
+const SENSITIVE_KEY = /token|authorization|signature|secret|hmac|password|api[-_]?key|cookie/i;
+const secretValues = Object.entries(process.env)
+  .filter(([name, value]) => /SECRET|PASSWORD|KEY|HMAC|TOKEN|JWT/i.test(name) && (value ?? "").length >= 8)
+  .map(([, value]) => value as string);
+const scrub = (value: unknown): unknown => {
+  if (typeof value === "string") return secretValues.reduce((text, secret) => text.split(secret).join("***"), value);
+  if (Array.isArray(value)) return value.map(scrub);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, inner]) => [key, SENSITIVE_KEY.test(key) ? "***" : scrub(inner)]));
+  }
+  return value;
+};
+const indent = (text: string) => text.split("\n").map((line) => `        ${line}`).join("\n");
+const json = (color: string, label: string, value: unknown) =>
+  console.log(`${color}   ${label}\n${indent(JSON.stringify(scrub(value), null, 2) ?? "(vacío)")}${COLOR.reset}`);
+/** One call, as the presentation shows it. `by` says who made it: the bot, or the script standing in for a person. */
+const trace = (by: "bot" | "guion", method: string, path: string, sent: unknown, status: number, answered: unknown) => {
+  if (!verbose) return;
+  if (by === "guion") console.log(`${COLOR.script}   [guion] 🔧 Lo hace el guion, no el bot: ${method} ${path}${COLOR.reset}`);
+  else console.log(`${COLOR.send}   🔧 Herramienta: ${method} ${path}${COLOR.reset}`);
+  if (sent !== undefined) json(by === "guion" ? COLOR.script : COLOR.send, "➡ Enviado:", sent);
+  json(status >= 400 ? COLOR.bad : COLOR.answer, `⬅ Respuesta ${status}:`, answered);
+};
+
 const coreApiUrl = `http://127.0.0.1:${process.env.PORT ?? 3000}`;
 const session = "bytogam-pruebas";
 const stateFile = resolve(import.meta.dirname, "../../.demo/flujo-presentacion.json");
@@ -74,8 +104,9 @@ const tool = async (token: string, method: "GET" | "POST", name: string, body?: 
     headers: { authorization: `Bearer ${token}`, ...(body === undefined ? {} : { "content-type": "application/json" }) },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const json = (await response.json().catch(() => ({}))) as Record<string, any>;
-  return { status: response.status, json };
+  const answered = (await response.json().catch(() => ({}))) as Record<string, any>;
+  trace("bot", method, `/tools/${name}`, body, response.status, answered);
+  return { status: response.status, json: answered };
 };
 
 /** What the scripted bot does for each step, with only the tools and the token it was given. */
@@ -187,6 +218,10 @@ try {
   console.log(`\n━━ Paso ${step} · ${TITLE[step]}`);
   console.log(`   👤 Cliente (+${phone}): ${CLIENT_TEXT[step]}`);
   const before = waha.to(phone).length;
+  if (verbose) {
+    console.log(`${COLOR.send}   📥 Entra por el webhook: POST /hooks/whatsapp   (firma HMAC: ***)${COLOR.reset}`);
+    json(COLOR.send, "➡ Enviado por WhatsApp:", { event: "message", session, payload: { from: `${phone}@c.us`, body: CLIENT_TEXT[step] } });
+  }
   const sent = await sendInbound({ coreApiUrl, session, hmacSecret: need("WAHA_HMAC_BYTOGAM_PRUEBAS") }, { phone, text: CLIENT_TEXT[step] });
   check(sent.status === 200, `core-api aceptó el mensaje firmado (${sent.status})`);
   if (sent.status !== 200) throw new Error("El mensaje no fue aceptado");
@@ -205,7 +240,7 @@ try {
   check(Boolean(now), "El contacto y su negocio están en la base");
   if (now && step === 1) {
     check(now.stage === "opportunity", 'El negocio quedó en "Nueva consulta"');
-    console.log(`   👀 En el panel: contacto «${now.first_name} ${now.last_name}» y un negocio nuevo en "Nueva consulta".`);
+    console.log(`   👀 Se refleja en el CRM: contacto «${now.first_name} ${now.last_name}» y un negocio nuevo en "Nueva consulta".`);
   }
   if (now && step === 2) {
     check(now.first_name === "Rosa" && now.last_name === "Delgado", "El nombre quedó guardado: Rosa Delgado");
@@ -216,8 +251,9 @@ try {
       headers: { "content-type": "application/json", prefer: "return=minimal" },
       body: JSON.stringify({ name: "Rosa Delgado – Restaurante, 2.400 pies" }),
     });
-    check(renamed.status === 204, "El negocio quedó con nombre: «Rosa Delgado – Restaurante, 2.400 pies»");
-    console.log("   👀 En el panel: abre el negocio; la ficha ya tiene nombre, ciudad, tipo de lugar y tamaño.");
+    trace("guion", "PATCH", `/admin/rest/deals?id=eq.${now.deal_id}`, { name: "Rosa Delgado – Restaurante, 2.400 pies" }, renamed.status, { resultado: "sin cuerpo (204)" });
+    check(renamed.status === 204, "[guion] El negocio quedó con nombre: «Rosa Delgado – Restaurante, 2.400 pies»");
+    console.log("   👀 Se refleja en el CRM: abre el negocio; la ficha ya tiene nombre, ciudad, tipo de lugar y tamaño.");
   }
   if (now && step === 3 && result.quote) {
     const total = Number(result.quote.total);
@@ -237,15 +273,16 @@ try {
       headers: { "content-type": "application/json", prefer: "return=minimal" },
       body: JSON.stringify({ deal_id: now.deal_id, type: "Nota", text, ...(salesId ? { sales_id: salesId } : {}) }),
     });
-    check(note.status === 201, "Quedó una nota en el negocio con el desglose");
-    console.log(`   👀 En el panel: el negocio pasó a "Cotizado" por $${money(total)}, con una nota con el desglose.`);
+    trace("guion", "POST", "/admin/rest/deal_notes", { deal_id: now.deal_id, type: "Nota", text }, note.status, { resultado: "sin cuerpo (201)" });
+    check(note.status === 201, "[guion] Quedó una nota en el negocio con el desglose");
+    console.log(`   👀 Se refleja en el CRM: el negocio pasó a "Cotizado" por $${money(total)}, con una nota con el desglose.`);
   }
   if (step === 4) {
     const task = (
       await db.query("select t.text, t.due_date from public.tasks t join public.contacts c on c.id = t.contact_id where c.phone_jsonb @> jsonb_build_array(jsonb_build_object('number', $1::text)) order by t.id desc limit 1", [`+${phone}`])
     ).rows[0];
     check(Boolean(task), "Se creó una tarea de seguimiento");
-    if (task) console.log(`   👀 En el panel: tarea nueva «${String(task.text).slice(0, 90)}».`);
+    if (task) console.log(`   👀 Se refleja en el CRM: tarea nueva «${String(task.text).slice(0, 90)}».`);
   }
 } catch (error) {
   check(false, (error as Error).message);
