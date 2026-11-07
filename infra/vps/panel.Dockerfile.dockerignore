@@ -1,0 +1,16 @@
+# Default deny: only the panel sources and the nginx config get into the build context.
+*
+!backoffice
+!infra/vps/panel-nginx.conf
+backoffice/node_modules
+backoffice/dist
+backoffice/.git
+backoffice/e2e
+backoffice/supabase
+backoffice/test-data
+backoffice/demo
+backoffice/doc
+backoffice/docs
+**/.env
+**/.env.*
+**/node_modules

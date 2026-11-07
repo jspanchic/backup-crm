@@ -1,0 +1,195 @@
+# CRM test stack for the VPS. Separate project: it never touches n8n, WAHA or their volumes.
+# Nothing is published to the internet. The only published port is the panel, on the VPS loopback (SSH tunnel).
+# core-api also joins the Docker network of n8n so the bot can call it. Read docs/DESPLIEGUE_VPS_PRUEBAS.md.
+# Values come from infra/vps/.env (git-ignored); see .env.example. Run compose from this folder.
+name: salvionix-crm
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# Both core-api and migrate use the same image; the build is shared.
+x-core-api-build: &core-api-build
+  context: ../..
+  dockerfile: infra/vps/core-api.Dockerfile
+
+services:
+  db:
+    image: postgres:17.10
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${PG_SUPERUSER_PASSWORD:?missing PG_SUPERUSER_PASSWORD in infra/vps/.env}
+    command: ["postgres", "-c", "max_connections=40", "-c", "shared_buffers=96MB"]
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks: [back]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    mem_limit: 512m
+    cpus: 1.0
+    logging: *logging
+
+  # One-shot: creates roles and the database, then applies pending migrations. Idempotent.
+  # The seed is not run here: it is an explicit step of the guide.
+  migrate:
+    image: salvionix-crm/core-api:test
+    build: *core-api-build
+    pull_policy: never
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGDATABASE: salvionix
+      PG_SUPERUSER_PASSWORD: ${PG_SUPERUSER_PASSWORD:?missing PG_SUPERUSER_PASSWORD in infra/vps/.env}
+      CORE_OWNER_PASSWORD: ${CORE_OWNER_PASSWORD:?missing CORE_OWNER_PASSWORD in infra/vps/.env}
+      CORE_API_PASSWORD: ${CORE_API_PASSWORD:?missing CORE_API_PASSWORD in infra/vps/.env}
+      AUTHENTICATOR_PASSWORD: ${AUTHENTICATOR_PASSWORD:?missing AUTHENTICATOR_PASSWORD in infra/vps/.env}
+    command: ["sh", "-c", "node scripts/db-bootstrap.ts && node scripts/db-migrate.ts"]
+    networks: [back]
+    mem_limit: 256m
+    cpus: 0.5
+    logging: *logging
+
+  # PostgREST stays internal: only core-api talks to it, signing a short-lived token per request.
+  postgrest:
+    image: postgrest/postgrest:v16.4
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${AUTHENTICATOR_PASSWORD:?missing AUTHENTICATOR_PASSWORD in infra/vps/.env}@db:5432/salvionix
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: crm_anon
+      PGRST_JWT_SECRET: ${PGRST_JWT_SECRET:?missing PGRST_JWT_SECRET in infra/vps/.env}
+      PGRST_DB_MAX_ROWS: "1000"
+      PGRST_DB_POOL: "5"
+      PGRST_OPENAPI_MODE: follow-privileges
+    # No healthcheck: the image has no shell or curl, and `postgrest --ready` does not work with the default host.
+    networks: [back]
+    mem_limit: 128m
+    cpus: 0.5
+    logging: *logging
+
+  core-api:
+    image: salvionix-crm/core-api:test
+    build: *core-api-build
+    pull_policy: never
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgrest:
+        condition: service_started
+    environment:
+      # NOT production on purpose: the /admin/* routes of the panel are only mounted outside production, with a
+      # development identity (Cloudflare Access, CRM-T3, does not exist yet). Test data only. See the guide.
+      NODE_ENV: development
+      HOST: 0.0.0.0
+      PORT: "3000"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      PGHOST: db
+      PGPORT: "5432"
+      PGDATABASE: salvionix
+      CORE_API_PASSWORD: ${CORE_API_PASSWORD:?missing CORE_API_PASSWORD in infra/vps/.env}
+      PGRST_JWT_SECRET: ${PGRST_JWT_SECRET:?missing PGRST_JWT_SECRET in infra/vps/.env}
+      POSTGREST_URL: http://postgrest:3000
+      CONVERSATION_TOKEN_SECRET: ${CONVERSATION_TOKEN_SECRET:?missing CONVERSATION_TOKEN_SECRET in infra/vps/.env}
+      BOT_HMAC_SECRET: ${BOT_HMAC_SECRET:?missing BOT_HMAC_SECRET in infra/vps/.env}
+      # Points at nothing by default (the name never resolves), so the outbox cannot reach real WhatsApp.
+      WAHA_BASE_URL: ${WAHA_BASE_URL:-http://waha.invalid:3000}
+      WAHA_API_KEY: ${WAHA_API_KEY:-}
+      OUTBOX_PACE_MIN_MS: ${OUTBOX_PACE_MIN_MS:-2000}
+      OUTBOX_PACE_MAX_MS: ${OUTBOX_PACE_MAX_MS:-5000}
+      GOTENBERG_URL: http://gotenberg:3000
+      DOCUMENTS_DIR: /data/documents
+      # Not a secret: the uuid of the sample responsible person created by the seed.
+      ADMIN_DEV_SUB: ${ADMIN_DEV_SUB:-00000000-0000-4000-8000-000000000001}
+      ADMIN_ALLOWED_ORIGINS: ${ADMIN_ALLOWED_ORIGINS:-http://127.0.0.1:8088,http://localhost:8088}
+      # Named secrets and bot URLs: the database stores only the NAME of the variable.
+      BOT_URL_JAVIER: ${BOT_URL_JAVIER:-}
+      WAHA_HMAC_BYTOGAM_PRUEBAS: ${WAHA_HMAC_BYTOGAM_PRUEBAS:-}
+    volumes:
+      - documents:/data/documents
+    networks:
+      back: {}
+      # External network of n8n. The alias is the internal URL n8n uses: http://salvionix-core-api:3000
+      n8n:
+        aliases:
+          - salvionix-core-api
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    mem_limit: 256m
+    cpus: 0.5
+    logging: *logging
+
+  # Static panel behind nginx; /admin/ goes to core-api. Published only on the VPS loopback.
+  panel:
+    image: salvionix-crm/panel:test
+    build:
+      context: ../..
+      dockerfile: infra/vps/panel.Dockerfile
+      args:
+        PANEL_PRESENTATION_MODE: ${PANEL_PRESENTATION_MODE:-true}
+    pull_policy: never
+    restart: unless-stopped
+    depends_on:
+      core-api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${PANEL_PORT:-8088}:8080"
+    networks: [back, edge]
+    mem_limit: 64m
+    cpus: 0.25
+    logging: *logging
+
+  # Optional PDF engine: docker compose --profile pdf up -d. Without it, quotes still work and the bot
+  # is told pdf=no_disponible. Internal network only.
+  gotenberg:
+    image: gotenberg/gotenberg:8.38.1@sha256:aa552cc115db488e0f0bcb07446aac13071ad51505b642c84bb894500907b42b
+    profiles: ["pdf"]
+    restart: unless-stopped
+    command:
+      - gotenberg
+      - --chromium-disable-javascript=true
+      - --api-timeout=30s
+    networks: [back]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    mem_limit: 1g
+    cpus: 1.0
+    logging: *logging
+
+networks:
+  # No route out of the host: db, PostgREST, core-api, the panel and gotenberg talk here.
+  back:
+    name: salvionix-crm_back
+    internal: true
+  # Normal network, only so the panel can publish its loopback port (publishing does not work on internal ones).
+  edge:
+    name: salvionix-crm_edge
+  # Docker network of the n8n that already runs on the VPS. Must exist; the guide says how to find its name.
+  n8n:
+    name: ${N8N_DOCKER_NETWORK:?missing N8N_DOCKER_NETWORK in infra/vps/.env (Docker network of n8n)}
+    external: true
+
+volumes:
+  db-data:
+    name: salvionix-crm_db-data
+  documents:
+    name: salvionix-crm_documents

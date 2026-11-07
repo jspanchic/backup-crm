@@ -1,0 +1,11 @@
+# Default deny: only what the image copies gets into the build context.
+*
+!core-api/package.json
+!core-api/package-lock.json
+!core-api/src
+!core-api/scripts
+!core-api/templates
+!db
+**/.env
+**/.env.*
+**/node_modules
