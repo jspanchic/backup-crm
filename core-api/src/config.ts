@@ -7,12 +7,12 @@ const schema = z.object({
   LOG_LEVEL: z.string().default("info"),
 
   PGHOST: z.string().default("127.0.0.1"),
-  PGPORT: z.coerce.number().int().default(55432),
+  PGPORT: z.coerce.number().int().default(15432),
   PGDATABASE: z.string().default("salvionix"),
   CORE_API_PASSWORD: z.string().min(16),
 
   PGRST_JWT_SECRET: z.string().min(32),
-  POSTGREST_URL: z.url().default("http://127.0.0.1:55300"),
+  POSTGREST_URL: z.url().default(`http://127.0.0.1:${process.env.POSTGREST_PORT ?? 13300}`),
 
   CONVERSATION_TOKEN_SECRET: z.string().min(32),
   BOT_HMAC_SECRET: z.string().min(32),
@@ -23,7 +23,7 @@ const schema = z.object({
   OUTBOX_PACE_MAX_MS: z.coerce.number().int().min(0).default(5000),
 
   // Gotenberg turns the HTML templates into PDFs. It is a separate container on the internal network.
-  GOTENBERG_URL: z.url().default("http://127.0.0.1:53000"),
+  GOTENBERG_URL: z.url().default(`http://127.0.0.1:${process.env.GOTENBERG_PORT ?? 13302}`),
   // Private folder for the PDFs, outside any web root. Relative paths are resolved from the working directory.
   DOCUMENTS_DIR: z.string().min(1).default("./.data/documents"),
   // Where the document templates and settings.json are read from. Unset: the templates folder of this repository.

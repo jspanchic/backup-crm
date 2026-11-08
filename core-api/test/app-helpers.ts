@@ -4,7 +4,7 @@ import type { BotDeps, FetchLike } from "../src/bot.ts";
 import type { OutboxDeps } from "../src/outbox.ts";
 import { loadConfig, type Config } from "../src/config.ts";
 import { createDb, type Db } from "../src/db.ts";
-import { loadLocalEnv, TEST_DB } from "./helpers.ts";
+import { loadLocalEnv, POSTGREST_TEST_URL, TEST_DB } from "./helpers.ts";
 
 loadLocalEnv();
 
@@ -36,7 +36,7 @@ const testEnv = (overrides: Record<string, string | undefined>): NodeJS.ProcessE
   ...process.env,
   NODE_ENV: "test",
   PGDATABASE: TEST_DB,
-  POSTGREST_URL: process.env.POSTGREST_TEST_URL ?? "http://127.0.0.1:55301",
+  POSTGREST_URL: POSTGREST_TEST_URL,
   OUTBOX_PACE_MIN_MS: "0",
   OUTBOX_PACE_MAX_MS: "0",
   ADMIN_DEV_SUB: randomUUID(),

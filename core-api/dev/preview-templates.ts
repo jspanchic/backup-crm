@@ -11,7 +11,7 @@ import { sampleRenderData } from "./sample-document.ts";
 
 const dir = process.env.TEMPLATES_DIR ?? DEFAULT_TEMPLATES_DIR;
 const out = resolve(import.meta.dirname, "../.data/preview");
-const render = gotenbergRenderer({ GOTENBERG_URL: process.env.GOTENBERG_URL ?? "http://127.0.0.1:53000" });
+const render = gotenbergRenderer({ GOTENBERG_URL: process.env.GOTENBERG_URL ?? `http://127.0.0.1:${process.env.GOTENBERG_PORT ?? 13302}` });
 const settings = JSON.parse(await readFile(join(dir, "settings.json"), "utf8")) as Settings;
 
 await mkdir(out, { recursive: true });

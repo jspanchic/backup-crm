@@ -70,7 +70,14 @@ if ($LASTEXITCODE -ne 0) {
   Wait-Until 'que Docker responda' 240 { docker info *> $null; $LASTEXITCODE -eq 0 }
 }
 
-# 2. Database and PostgREST
+# 2. Database and PostgREST. First the host ports (scripts/ports.ps1): not reserved by Windows, not used by something else,
+#    unless this stack is already up.
+. "$PSScriptRoot\ports.ps1"
+$envFile = Join-Path $root 'infra/local/.env'
+if (-not ((docker compose -f (Join-Path $root 'infra/local/docker-compose.yml') --env-file $envFile ps -q db 2>$null | Out-String).Trim())) {
+  $problems = Test-LocalPorts $envFile
+  if ($problems) { throw ($problems -join "`n") }
+}
 $core = Join-Path $root 'core-api'
 Set-Location $core
 $npm = Join-Path $nodeDir 'npm.cmd'

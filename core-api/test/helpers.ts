@@ -5,7 +5,6 @@ import type pg from "pg";
 import { connect, owner, requireEnv } from "../scripts/db-lib.ts";
 
 export const TEST_DB = "salvionix_test";
-export const POSTGREST_TEST_URL = process.env.POSTGREST_TEST_URL ?? "http://127.0.0.1:55301";
 
 /** CI passes the variables directly; locally they come from the git-ignored file. */
 export const loadLocalEnv = (): void => {
@@ -13,6 +12,9 @@ export const loadLocalEnv = (): void => {
   if (!process.env.PG_SUPERUSER_PASSWORD && existsSync(file)) process.loadEnvFile(file);
 };
 loadLocalEnv();
+
+// The second PostgREST, on the test database. Its host port is POSTGREST_TEST_PORT in infra/local/.env.
+export const POSTGREST_TEST_URL = process.env.POSTGREST_TEST_URL ?? `http://127.0.0.1:${process.env.POSTGREST_TEST_PORT ?? 13301}`;
 
 export const ownerClient = () => owner(TEST_DB);
 export const coreApiClient = () => connect("core_api", requireEnv("CORE_API_PASSWORD"), TEST_DB);

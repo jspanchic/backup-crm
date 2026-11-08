@@ -17,6 +17,8 @@ $panelUrl = 'http://127.0.0.1:5173/'
 $apiUrl = 'http://127.0.0.1:3000/healthz'
 New-Item -ItemType Directory -Force $state | Out-Null
 
+. "$PSScriptRoot\ports.ps1"
+
 function Say([string]$text) { Write-Host "[presentacion] $text" }
 
 function Find-Node {
@@ -71,14 +73,14 @@ if ($LASTEXITCODE -ne 0) {
   Wait-Until 'que Docker responda' 240 { docker info *> $null; $LASTEXITCODE -eq 0 }
 }
 
-# 2. The ports are fixed: if the regular demo is up, ask to stop it instead of touching it.
+# 2. The host ports come from infra/local/.env (scripts/ports.ps1). Before Docker tries to publish them, check that Windows has
+#    not reserved them and that nothing else uses them. If the stack of the presentation is already up, they are ours.
 $ours = (Compose ps -q db 2>$null | Out-String).Trim()
+$ports = Get-LocalPorts $envFile
 if (-not $ours) {
-  foreach ($port in 55432, 55300) {
-    if (Test-Port $port) { throw "El puerto $port ya esta en uso (probablemente la demo normal). Apagala con DETENER-DEMO.cmd y vuelve a intentar." }
-  }
+  $problems = Test-LocalPorts $envFile
+  if ($problems) { throw ($problems -join "`n") }
 }
-
 $core = Join-Path $root 'core-api'
 Set-Location $core
 $npm = Join-Path $nodeDir 'npm.cmd'
@@ -92,14 +94,14 @@ Step 'Creando roles y base' { & $npm run --silent db:bootstrap }
 Step 'Aplicando migraciones' { & $npm run --silent db:migrate }
 Step 'Cargando datos base' { & $npm run --silent db:seed }
 # The PDFs of the presentation data are made while seeding, so the PDF engine has to be answering by then.
-try { Wait-Until 'que el motor de PDF responda' 120 { Test-Url 'http://127.0.0.1:53000/health' } }
+try { Wait-Until 'que el motor de PDF responda' 120 { Test-Url "http://127.0.0.1:$($ports.GOTENBERG_PORT)/health" } }
 catch { Say 'El motor de PDF no respondio: los documentos se generaran desde el panel cuando este encendido.' }
 if ($Reset) {
   Step 'Reiniciando los datos de la presentacion' { & $npm run --silent db:seed-presentacion -- --reset --yes-presentation-db }
 } else {
   Step 'Cargando datos de la presentacion (ficticios)' { & $npm run --silent db:seed-presentacion }
 }
-Wait-Until 'que PostgREST responda' 60 { Test-Url 'http://127.0.0.1:55300/' }
+Wait-Until 'que PostgREST responda' 60 { Test-Url "http://127.0.0.1:$($ports.POSTGREST_PORT)/" }
 
 # 3. core-api and the panel, detached, with their own logs (see demo-start.ps1 for why WMI)
 function Start-Background([string]$name, [string]$dir, [string[]]$arguments, [int]$port, [hashtable]$variables = @{}) {

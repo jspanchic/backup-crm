@@ -5,8 +5,9 @@ import pg from "pg";
 
 export const REPO_ROOT = resolve(import.meta.dirname, "../..");
 export const DB_DIR = join(REPO_ROOT, "db");
-const HOST = process.env.PGHOST ?? "127.0.0.1";
-const PORT = Number(process.env.PGPORT ?? 55432);
+// Read when connecting, not when imported: the tests load infra/local/.env after this module (PGPORT is the host port of the database).
+const host = (): string => process.env.PGHOST ?? "127.0.0.1";
+const port = (): number => Number(process.env.PGPORT ?? 15432);
 
 export const requireEnv = (name: string): string => {
   const value = process.env[name];
@@ -15,7 +16,7 @@ export const requireEnv = (name: string): string => {
 };
 
 export const connect = async (user: string, password: string, database: string): Promise<pg.Client> => {
-  const client = new pg.Client({ host: HOST, port: PORT, user, password, database });
+  const client = new pg.Client({ host: host(), port: port(), user, password, database });
   await client.connect();
   return client;
 };

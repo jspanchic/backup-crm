@@ -14,7 +14,7 @@ import { loadConfig } from "../src/config.ts";
 import { createDb, type Db } from "../src/db.ts";
 import { signBotRequest } from "../src/signature.ts";
 import { channelSecret } from "./app-helpers.ts";
-import { ownerClient, TEST_DB } from "./helpers.ts";
+import { ownerClient, POSTGREST_TEST_URL, TEST_DB } from "./helpers.ts";
 
 /**
  * The demo against a real, listening core-api: real HTTP between the simulator, core-api and the scripted
@@ -41,7 +41,7 @@ describe("demo with the scripted bot", () => {
     Object.assign(env, process.env, {
       NODE_ENV: "test",
       PGDATABASE: TEST_DB,
-      POSTGREST_URL: "http://127.0.0.1:55301",
+      POSTGREST_URL: POSTGREST_TEST_URL,
       WAHA_BASE_URL: waha.url,
       WAHA_API_KEY: "k".repeat(32),
       OUTBOX_PACE_MIN_MS: "0",

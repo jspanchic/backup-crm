@@ -1,6 +1,8 @@
 # CRM test stack for the VPS. Separate project: it never touches n8n, WAHA or their volumes.
 # Nothing is published to the internet. The only published port is the panel, on the VPS loopback (SSH tunnel).
-# core-api also joins the Docker network of n8n so the bot can call it. Read docs/DESPLIEGUE_VPS_PRUEBAS.md.
+# Only the gateway (a small nginx) joins the Docker network of n8n. n8n reaches core-api through it at http://salvionix-core-api:8080,
+# and it exposes /tools/* only; /admin/* stays on the internal network. core-api reaches n8n and WAHA through it too.
+# Read docs/DESPLIEGUE_VPS_PRUEBAS.md.
 # Values come from infra/vps/.env (git-ignored); see .env.example. Run compose from this folder.
 name: salvionix-crm
 
@@ -119,12 +121,7 @@ services:
       WAHA_HMAC_BYTOGAM_PRUEBAS: ${WAHA_HMAC_BYTOGAM_PRUEBAS:-}
     volumes:
       - documents:/data/documents
-    networks:
-      back: {}
-      # External network of n8n. The alias is the internal URL n8n uses: http://salvionix-core-api:3000
-      n8n:
-        aliases:
-          - salvionix-core-api
+    networks: [back]
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
       interval: 10s
@@ -135,6 +132,36 @@ services:
     cpus: 0.5
     logging: *logging
 
+  # The only door between the network of n8n and the CRM. Strict by default: n8n gets /tools/*, the health check and the
+  # WhatsApp webhook; /admin/* and the rest answer 403. It also carries what core-api sends out: the bot webhook of n8n (:8081)
+  # and WAHA (:8082). Config: gateway.nginx.template, filled in from the two *_UPSTREAM variables.
+  gateway:
+    image: nginx:1.30.6-alpine
+    restart: unless-stopped
+    depends_on:
+      core-api:
+        condition: service_healthy
+    environment:
+      NGINX_ENVSUBST_FILTER: "^(N8N|WAHA)_"
+      N8N_UPSTREAM: ${N8N_UPSTREAM:?missing N8N_UPSTREAM in infra/vps/.env (host:port of n8n, e.g. the container name and 5678)}
+      WAHA_UPSTREAM: ${WAHA_UPSTREAM:-waha.invalid:3000}
+    volumes:
+      - ./gateway.nginx.template:/etc/nginx/templates/default.conf.template:ro
+    networks:
+      back: {}
+      # External network of n8n. The alias is the internal URL n8n uses: http://salvionix-core-api:8080
+      n8n:
+        aliases:
+          - salvionix-core-api
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+    mem_limit: 32m
+    cpus: 0.25
+    logging: *logging
   # Static panel behind nginx; /admin/ goes to core-api. Published only on the VPS loopback.
   panel:
     image: salvionix-crm/panel:test
@@ -183,7 +210,7 @@ networks:
   # Normal network, only so the panel can publish its loopback port (publishing does not work on internal ones).
   edge:
     name: salvionix-crm_edge
-  # Docker network of the n8n that already runs on the VPS. Must exist; the guide says how to find its name.
+  # Docker network of the n8n that already runs on the VPS. Only the gateway joins it. Must exist; the guide says how to find its name.
   n8n:
     name: ${N8N_DOCKER_NETWORK:?missing N8N_DOCKER_NETWORK in infra/vps/.env (Docker network of n8n)}
     external: true

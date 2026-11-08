@@ -95,8 +95,8 @@ VITE_DATA_PROVIDER=core-api npm run dev
 
 Con `INICIAR-PRESENTACION.cmd limpio` la agenda, la conversación de la ficha y los documentos funcionan con datos ficticios (todo `is_test`; nada sale a WhatsApp):
 
-- **Agenda:** un aplicador, «Aplicador Orlando», con 60 minutos de servicio más 30 de traslado. Fines de semana de 10:00 a 19:00; entre semana de 09:00 a 22:00 **solo en sus días libres**. **La lista real de días libres no se ha entregado:** la semilla (`db/seeds/presentation/02_calendar.sql`) trae miércoles y jueves como dato **PROVISIONAL**. Se cambia sin tocar código: botón «Disponibilidad» de la agenda, o esa semilla. Las citas de ejemplo se calculan desde el día en que se carga la semilla, así que conviene encender con `limpio` el mismo día de la presentación.
+- **Agenda:** un aplicador de ejemplo, «Aplicador de ejemplo (Orlando)», con 60 minutos de servicio más 30 de traslado. Sus días y franjas salen de **un solo archivo comentado**, `db/seeds/aplicadores.jsonc`, y se cambian por los reales como explica `docs/DATOS_REALES.md` (también desde Agenda → Disponibilidad). Las citas de ejemplo se calculan desde el día en que se carga la semilla, así que conviene encender con `limpio` el mismo día de la presentación.
 - **Conversación:** dos fichas (María Fernández y Patricia Nguyen) traen su conversación de WhatsApp con Javier.
 - **Documentos:** esos dos negocios traen cotización, orden de compra y orden de trabajo en PDF (las genera el mismo código del panel; hace falta el motor de PDF, que ahora se enciende junto con la base). Si no estaba encendido al cargar los datos, se generan con los botones del negocio.
-- **Cotización en PDF:** menos texto, metraje destacado, descuento solo si la marca lo tiene activo y una línea de impuesto con la tasa de la marca (provisional, 6,5 %). Ver `docs/PLANTILLAS_PDF.md`.
+- **Cotización en PDF:** menos texto, metraje destacado, descuento solo si la marca lo tiene activo y una línea de impuesto con la tasa de la marca (6,5 % de ejemplo). Ver `docs/PLANTILLAS_PDF.md`.
 - **Sigue como «Próximamente · 20/11»:** la agrupación de citas por zona con descuento.

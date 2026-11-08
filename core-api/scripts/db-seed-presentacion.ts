@@ -1,7 +1,7 @@
 // Loads the presentation data (fictitious, every row is_test). With --reset it first empties what customers
 // and the bot create, so the show starts clean. Configuration (brands, channels, prices, technicians) stays.
 // Only for the presentation database: it refuses to run without --yes-presentation-db.
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type pg from "pg";
 import { loadConfig } from "../src/config.ts";
@@ -13,6 +13,72 @@ import { DB_DIR, owner, readText } from "./db-lib.ts";
 // the panel uses, so what the presentation shows is what the product makes.
 const WITH_QUOTE = ["+14075550111", "+14075550117"];
 
+// The applicators and their weekly availability come from ONE editable file (db/seeds/aplicadores.jsonc). Lines that start
+// with // are comments. Nothing here is a real person: replace the file with the real data (docs/DATOS_REALES.md).
+const WEEKDAYS: Record<string, number> = { domingo: 0, lunes: 1, martes: 2, miercoles: 3, jueves: 4, viernes: 5, sabado: 6 };
+const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+type Applicators = {
+  servicio_minutos: number;
+  traslado_minutos: number;
+  aplicadores: { nombre: string; disponibilidad: { dias: string[]; desde: string; hasta: string }[] }[];
+};
+
+const readApplicators = (): Applicators => {
+  const file = join(DB_DIR, "seeds/aplicadores.jsonc");
+  if (!existsSync(file)) throw new Error(`No existe ${file}`);
+  const text = readText(file).split("\n").filter((line) => !/^\s*\/\//.test(line)).join("\n");
+  let data: Applicators;
+  try {
+    data = JSON.parse(text) as Applicators;
+  } catch (error) {
+    throw new Error(`aplicadores.jsonc no es JSON valido (los comentarios van en lineas propias que empiezan con //): ${(error as Error).message}`);
+  }
+  const bad = (message: string): never => {
+    throw new Error(`aplicadores.jsonc: ${message}`);
+  };
+  if (!Number.isInteger(data.servicio_minutos) || data.servicio_minutos <= 0) bad("servicio_minutos debe ser un entero mayor que 0");
+  if (!Number.isInteger(data.traslado_minutos) || data.traslado_minutos < 0) bad("traslado_minutos debe ser un entero, 0 o mas");
+  if (!Array.isArray(data.aplicadores) || data.aplicadores.length === 0) bad("falta al menos un aplicador");
+  for (const person of data.aplicadores) {
+    if (typeof person.nombre !== "string" || !person.nombre.trim()) bad("cada aplicador necesita un nombre");
+    const byDay = new Map<number, [string, string][]>();
+    for (const slot of person.disponibilidad ?? []) {
+      if (!TIME.test(slot.desde) || !TIME.test(slot.hasta) || slot.hasta <= slot.desde) bad(`${person.nombre}: la franja ${slot.desde}-${slot.hasta} no es valida (HH:MM, y hasta despues de desde)`);
+      if (!slot.dias?.length) bad(`${person.nombre}: una franja no tiene dias`);
+      for (const name of slot.dias) {
+        const day = WEEKDAYS[name];
+        if (day === undefined) bad(`${person.nombre}: "${name}" no es un dia (lunes, martes, miercoles, jueves, viernes, sabado, domingo)`);
+        const taken = byDay.get(day) ?? [];
+        if (taken.some(([from, to]) => slot.desde < to && from < slot.hasta)) bad(`${person.nombre}: dos franjas se cruzan el ${name}`);
+        byDay.set(day, [...taken, [slot.desde, slot.hasta]]);
+      }
+    }
+  }
+  return data;
+};
+
+const applyApplicators = async (client: pg.Client): Promise<string> => {
+  const data = readApplicators();
+  await client.query("update core.scheduling_settings set slot_minutes = $1, buffer_minutes = $2 where brand_id = 1", [data.servicio_minutos, data.traslado_minutos]);
+  let windows = 0;
+  for (const [index, person] of data.aplicadores.entries()) {
+    const id = index + 1;
+    await client.query(
+      "insert into core.technicians (id, brand_id, name) values ($1, 1, $2) on conflict (id) do update set name = excluded.name, active = true",
+      [id, person.nombre.trim()],
+    );
+    await client.query("delete from core.technician_availability where technician_id = $1", [id]);
+    for (const slot of person.disponibilidad) {
+      for (const name of slot.dias) {
+        await client.query("insert into core.technician_availability (technician_id, weekday, start_time, end_time) values ($1, $2, $3, $4)", [id, WEEKDAYS[name], slot.desde, slot.hasta]);
+        windows += 1;
+      }
+    }
+  }
+  await client.query("select setval(pg_get_serial_sequence('core.technicians', 'id'), greatest(1, (select max(id) from core.technicians)))");
+  return `${data.aplicadores.length} applicator(s), ${windows} availability windows, ${data.servicio_minutos} min service + ${data.traslado_minutos} min travel`;
+};
 const seedDocuments = async (client: pg.Client): Promise<void> => {
   let deps;
   try {
@@ -77,6 +143,7 @@ try {
     // The numbers of the test series (PRUEBA-COT, PRUEBA-OC, PRUEBA-OT) start again; the real series is not touched.
     await client.query(`update core.document_counters set last_number = 0 where is_test`);
   }
+  console.log(`calendar from aplicadores.jsonc: ${await applyApplicators(client)}`);
   const dir = join(DB_DIR, "seeds/presentation");
   for (const file of readdirSync(dir).filter((name) => name.endsWith(".sql")).sort()) {
     await client.query(readText(join(dir, file)));

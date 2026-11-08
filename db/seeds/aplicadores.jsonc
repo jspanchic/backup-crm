@@ -1,0 +1,30 @@
+// DATOS DE EJEMPLO de los aplicadores (técnicos) y su agenda. Es el ÚNICO archivo de donde sale la disponibilidad
+// de la presentación: lo lee `npm run db:seed-presentacion` (en core-api) y lo carga en la base.
+// Cómo reemplazarlo por los datos reales: docs/DATOS_REALES.md.
+//
+// Formato: JSON con líneas de comentario completas que empiezan con //. Los comentarios van SOLO en líneas propias.
+// Después de editarlo, vuelve a cargar con:  INICIAR-PRESENTACION.cmd limpio
+// (o, sin borrar nada más:  cd core-api; npm run db:seed-presentacion).
+{
+  // Minutos de trabajo de cada cita. Define el largo de cada horario que se ofrece.
+  "servicio_minutos": 60,
+  // Minutos de traslado que se reservan después de cada cita, antes de poder ofrecer otra.
+  // Los horarios salen cada servicio_minutos + traslado_minutos desde el inicio de cada franja.
+  "traslado_minutos": 30,
+
+  "aplicadores": [
+    {
+      "nombre": "Aplicador de ejemplo (Orlando)",
+      // Franjas de la semana en que SÍ atiende. Un día que no aparece aquí no tiene horarios.
+      // dias: lunes, martes, miercoles, jueves, viernes, sabado, domingo (sin tildes).
+      // desde y hasta: hora local de la marca, formato 24 h "HH:MM". La última cita debe terminar antes de "hasta".
+      // Un mismo día puede tener varias franjas, pero no pueden cruzarse.
+      "disponibilidad": [
+        // Fines de semana.
+        { "dias": ["sabado", "domingo"], "desde": "10:00", "hasta": "19:00" },
+        // Entre semana, SOLO en sus días libres. Estos dos días son de ejemplo: no son los días reales.
+        { "dias": ["miercoles", "jueves"], "desde": "09:00", "hasta": "22:00" }
+      ]
+    }
+  ]
+}

@@ -101,7 +101,7 @@ Los montos **los calcula la base**; la plantilla solo los muestra.
 update core.brands set tax_pct = 6.5, discount_enabled = false where id = 1;  -- impuesto 6,5 %, descuento apagado
 ```
 
-La tasa de la semilla de la presentación (6,5 %) es **provisional**, hasta confirmarla.
+La tasa de la semilla de la presentación (6,5 %) es un valor de ejemplo; `docs/DATOS_REALES.md` explica cómo cambiarla.
 ### Datos legales (`legal.*`) — los define `settings.json`
 
 | Campo | Qué es |

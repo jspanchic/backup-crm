@@ -1,5 +1,5 @@
 # Local stack for development and tests. Loopback only; never deploy this file.
-# Values come from infra/local/.env (git-ignored), created by core-api/scripts/init-local-env.ts.
+# Values come from infra/local/.env (git-ignored), created by core-api/scripts/init-local-env.ts. The host ports are in that file too.
 name: salvionix-local
 services:
   db:
@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_PASSWORD: ${PG_SUPERUSER_PASSWORD:?run npm run local:init in core-api}
     ports:
-      - "127.0.0.1:55432:5432"
+      - "127.0.0.1:${PGPORT:-15432}:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
@@ -30,7 +30,7 @@ services:
       PGRST_DB_MAX_ROWS: "1000"
       PGRST_OPENAPI_MODE: follow-privileges
     ports:
-      - "127.0.0.1:55300:3000"
+      - "127.0.0.1:${POSTGREST_PORT:-13300}:3000"
   # Same image against the throwaway test database, so permission tests hit the real thing.
   api-test:
     image: postgrest/postgrest:v16.4
@@ -42,7 +42,7 @@ services:
       <<: *postgrest-env
       PGRST_DB_URI: postgres://authenticator:${AUTHENTICATOR_PASSWORD}@db:5432/salvionix_test
     ports:
-      - "127.0.0.1:55301:3000"
+      - "127.0.0.1:${POSTGREST_TEST_PORT:-13301}:3000"
   # Turns the HTML templates of core-api/templates into PDFs. Pinned by tag and digest. In production it sits on
   # the internal network only, with no route to the internet.
   gotenberg:
@@ -54,7 +54,7 @@ services:
       - --api-timeout=30s
     mem_limit: 1g
     ports:
-      - "127.0.0.1:53000:3000"
+      - "127.0.0.1:${GOTENBERG_PORT:-13302}:3000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 5s
