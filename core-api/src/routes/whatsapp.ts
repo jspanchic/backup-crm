@@ -4,6 +4,7 @@ import { dispatchToBot } from "../bot.ts";
 import { verifyWahaSignature } from "../signature.ts";
 import { parseDelivery, peekSession, toAccepted } from "../waha.ts";
 import type { AppDeps } from "../app.ts";
+import { resolveWahaLid } from "../waha-client.ts";
 
 type ResolvedChannel = { channel_id: number; secret_ref: string; bot_key: string; is_test: boolean };
 type Ingested = { status: "duplicate" } | { status: "accepted"; message_id: number; bot_paused: boolean };
@@ -46,14 +47,34 @@ export const whatsappRoutes = (app: FastifyInstance, deps: AppDeps): void => {
     if (accepted.ignore) return reply.code(200).send({ status: "ignored" });
     const { message } = accepted;
 
+    let phone = message.phone;
+    if (!phone && message.lid) {
+      phone = await resolveWahaLid(deps.config, deps.wahaFetch, session, message.lid, message.ownPhone);
+      if (!phone) {
+        const { rows: [{ id }] } = await deps.db.query<{ id: number | null }>(
+          "select api.escalate_waha_lid($1, $2, $3) as id", [channel.channel_id, message.providerMessageId, message.chatId],
+        );
+        if (id === null) return reply.code(200).send({ status: "duplicate" });
+        request.log.warn({ escalationId: id, channelId: channel.channel_id }, "unresolved WAHA LID escalated");
+        return reply.code(200).send({ status: "escalated" });
+      }
+    }
+
+    if (message.resetRequested && phone) {
+      const { rows: [{ status }] } = await deps.db.query<{ status: "reset" | "duplicate" | "protected" | "not_authorized" }>(
+        "select api.try_team_reset($1, $2, $3, $4) as status", [session, message.providerMessageId, phone, message.chatId],
+      );
+      if (status !== "not_authorized") return reply.code(200).send({ status });
+    }
+
     const ingested = await deps.db.query<{ result: Ingested }>("select api.ingest_inbound($1, $2, $3, $4, $5, $6, $7, $8, $9) as result", [
       "waha",
       session,
       message.providerMessageId,
       message.sentAt,
       message.body,
-      message.phone,
-      message.lid,
+      phone,
+      null,
       message.pushName,
       message.chatId,
     ]);

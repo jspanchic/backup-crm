@@ -10,7 +10,7 @@ begin;
 
 truncate table
   public.contacts, public.deals, public.companies, public.tasks, public.contact_notes, public.deal_notes,
-  core.contact_identities, core.unrouted_events
+  core.contact_identities, core.unrouted_events, core.waha_lid_escalations, core.team_reset_receipts
 restart identity cascade;
 
 -- The test numbering series (PRUEBA-COT, PRUEBA-OC, PRUEBA-OT) starts again; the real series (COT, OC, OT) is not touched.
@@ -27,6 +27,8 @@ union all select 'contact_notes', count(*) from public.contact_notes
 union all select 'deal_notes', count(*) from public.deal_notes
 union all select 'core.contact_identities', count(*) from core.contact_identities
 union all select 'core.unrouted_events', count(*) from core.unrouted_events
+union all select 'core.waha_lid_escalations', count(*) from core.waha_lid_escalations
+union all select 'core.team_reset_receipts', count(*) from core.team_reset_receipts
 union all select 'core.conversations', count(*) from core.conversations
 union all select 'core.messages', count(*) from core.messages
 union all select 'core.outbox', count(*) from core.outbox

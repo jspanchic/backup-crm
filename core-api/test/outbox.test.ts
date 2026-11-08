@@ -1,7 +1,7 @@
 import type pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { runOutboxOnce } from "../src/outbox.ts";
-import { createTestApp, delivery, post, type TestApp } from "./app-helpers.ts";
+import { createTestApp, delivery, fakePhone, post, type TestApp } from "./app-helpers.ts";
 import { clearOutboxForTest, ownerClient } from "./helpers.ts";
 
 describe("outbox", () => {
@@ -67,11 +67,12 @@ describe("outbox", () => {
 
   it("sends to a lid chat id as it is", async () => {
     await drain();
-    const conversation = await startConversation({ from: `${Date.now()}@lid` });
+    const chatId = `${Date.now()}:2@lid`;
+    const conversation = await startConversation({ from: chatId, senderAlt: `${fakePhone().digits}@s.whatsapp.net` });
     await enqueue(conversation, "Hola");
     await runOutboxOnce(test.outboxDeps);
     const call = test.wahaCalls.find((request) => request.url.endsWith("/api/sendText"))!;
-    expect(JSON.parse(call.body).chatId).toMatch(/@lid$/);
+    expect(JSON.parse(call.body).chatId).toBe(chatId);
   });
 
   it("tries again after a safe failure, with a growing wait, and gives up after three attempts", async () => {

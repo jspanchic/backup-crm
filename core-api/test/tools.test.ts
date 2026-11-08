@@ -656,8 +656,10 @@ describe("bot tools", () => {
       expect(await queued(id)).toBe(1);
     });
 
-    it("stops the phone placeholder for a customer with no number", async () => {
-      const { token, id } = await start({ from: `${Date.now()}@lid` });
+    it("stops the phone placeholder for a legacy contact with no number", async () => {
+      const { id, contactId, token } = await start();
+      await owner.query("update public.contacts set phone_jsonb = null where id = $1", [contactId]);
+      await owner.query("update core.contact_identities i set type = 'wa_lid', value = i.id::text || '@lid' from core.conversations c where c.identity_id = i.id and c.id = $1", [id]);
       const response = await call(token, "POST", "responder", { texto: "Tu celular es {{telefono}}" });
       expect(response.json().reason).toBe("phone_unavailable");
       expect(await queued(id)).toBe(0);

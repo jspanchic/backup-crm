@@ -1,9 +1,10 @@
 import { createHmac } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { toE164 } from "../../src/phone.ts";
 import { CARD_PLACEHOLDER, redactCards } from "../../src/redact.ts";
 import { signBotRequest, verifyWahaSignature, WAHA_TOLERANCE_MS } from "../../src/signature.ts";
 import { parseDelivery, toAccepted } from "../../src/waha.ts";
+import { resolveWahaLid, type WahaFetch } from "../../src/waha-client.ts";
 
 describe("phone numbers", () => {
   it.each([
@@ -123,7 +124,36 @@ describe("reading a delivery", () => {
     expect(read(payload)).toMatchObject({ ignore: false, message: { phone } });
   });
 
-  it("keeps a lid as identity when there is no phone, and never treats it as a phone", () => {
+  it("preserves the original LID chat while looking up the canonical ID", () => {
+    expect(read({ from: "99887766:12@lid", participant: null })).toMatchObject({
+      ignore: false, message: { chatId: "99887766:12@lid", lid: "99887766@lid", phone: null },
+    });
+  });
+
+  it("never assigns the WAHA chip or recipient as the sender of a LID chat", () => {
+    expect(read({
+      from: "99887766@lid", participant: "12025550124@c.us",
+      _data: { Info: { SenderAlt: "12025550123:3@s.whatsapp.net", Sender: "99887766@lid" } },
+    }, { me: { id: "12025550123@c.us" } })).toMatchObject({
+      ignore: false, message: { phone: null, lid: "99887766@lid", ownPhone: "+12025550123" },
+    });
+  });
+
+  it("marks only the exact standalone reset text", () => {
+    expect(read({ from: "12025550123@c.us", body: "reiniciar" })).toMatchObject({
+      ignore: false, message: { resetRequested: true },
+    });
+    for (const body of [" Reiniciar", "reiniciar ", "Reiniciar", "reiniciar por favor"]) {
+      expect(read({ from: "12025550123@c.us", body })).toMatchObject({
+        ignore: false, message: { resetRequested: false },
+      });
+    }
+    expect(read({ from: "12025550123@c.us", body: "reiniciar", hasMedia: true })).toMatchObject({
+      ignore: false, message: { resetRequested: false },
+    });
+  });
+
+  it("reports an unresolved LID without treating it as a phone", () => {
     expect(read({ from: "99887766@lid" })).toMatchObject({ ignore: false, message: { phone: null, lid: "99887766@lid" } });
   });
 
@@ -161,5 +191,50 @@ describe("reading a delivery", () => {
   it("rejects a delivery with no message id, which is what the duplicate check needs", () => {
     expect(parseDelivery(Buffer.from(JSON.stringify({ session: "s", payload: { from: "1@c.us", body: "hi" } })))).toEqual({ ok: false });
     expect(parseDelivery(Buffer.from("not json"))).toEqual({ ok: false });
+  });
+});
+
+describe("looking up a WAHA LID", () => {
+  const config = { WAHA_BASE_URL: "http://waha.test", WAHA_API_KEY: "test-placeholder" };
+  const lid = "99887766@lid";
+  const own = "+12025550123";
+
+  it("queries a single mapping with the WAHA API key and normalizes the returned phone", async () => {
+    const fetch = vi.fn<WahaFetch>().mockResolvedValue({
+      ok: true, status: 200, json: async () => ({ lid, pn: "12025550124@c.us" }),
+    });
+    await expect(resolveWahaLid(config, fetch, "salvionix", lid, own)).resolves.toBe("+12025550124");
+    expect(fetch).toHaveBeenCalledExactlyOnceWith("http://waha.test/api/salvionix/lids/99887766", {
+      method: "GET", headers: { "X-Api-Key": "test-placeholder" }, signal: expect.any(AbortSignal), redirect: "error",
+    });
+  });
+
+  it.each([
+    ["not found", { lid, pn: null }],
+    ["the chip itself", { lid, pn: "12025550123:2@s.whatsapp.net" }],
+    ["a different LID", { lid: "777@lid", pn: "12025550124@c.us" }],
+    ["another LID as a phone", { lid, pn: "12025550124@lid" }],
+    ["an invalid phone", { lid, pn: "123@c.us" }],
+  ])("leaves %s unresolved", async (_reason, data) => {
+    const fetch = vi.fn<WahaFetch>().mockResolvedValue({ ok: true, status: 200, json: async () => data });
+    await expect(resolveWahaLid(config, fetch, "salvionix", lid, own)).resolves.toBeNull();
+  });
+
+  it("leaves HTTP and transport errors unresolved", async () => {
+    const cancel = vi.fn(async () => {});
+    const fetch = vi.fn<WahaFetch>()
+      .mockResolvedValueOnce({ ok: false, status: 503, body: { cancel } })
+      .mockRejectedValueOnce(new Error("WAHA unavailable"));
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await expect(resolveWahaLid(config, fetch, "salvionix", lid, own)).resolves.toBeNull();
+    }
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it("avoids lookup without the authenticated account or for a malformed session", async () => {
+    const fetch = vi.fn<WahaFetch>();
+    await expect(resolveWahaLid(config, fetch, "salvionix", lid, null)).resolves.toBeNull();
+    await expect(resolveWahaLid(config, fetch, "other/../salvionix", lid, own)).resolves.toBeNull();
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

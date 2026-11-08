@@ -2,6 +2,7 @@ import { createHmac, randomInt, randomUUID } from "node:crypto";
 import { buildApp, type BuiltApp, type ProxyFetch } from "../src/app.ts";
 import type { BotDeps, FetchLike } from "../src/bot.ts";
 import type { OutboxDeps } from "../src/outbox.ts";
+import type { WahaFetch } from "../src/waha-client.ts";
 import { loadConfig, type Config } from "../src/config.ts";
 import { createDb, type Db } from "../src/db.ts";
 import { loadLocalEnv, POSTGREST_TEST_URL, TEST_DB } from "./helpers.ts";
@@ -12,6 +13,9 @@ export const SESSION = "bytogam-pruebas";
 export const NOW = new Date("2030-06-01T12:00:00Z");
 
 export type Call = { url: string; headers: Record<string, string>; body: string };
+
+type LidLookup = Pick<Call, "url" | "headers">;
+type LidLookupResult = { ok: boolean; status: number; json?: () => Promise<unknown> };
 
 export type TestApp = {
   app: BuiltApp;
@@ -24,6 +28,8 @@ export type TestApp = {
   botCalls: Call[];
   wahaCalls: Call[];
   presenceCalls: Call[];
+  lidLookups: LidLookup[];
+  lidAnswers: { next: (call: LidLookup) => Promise<LidLookupResult> };
   inboundSteps: (string | number)[];
   /** Replace what the fake bot answers: a status, "down" or a function that can wait. */
   botAnswers: { next: (call: Call) => Promise<{ ok: boolean; status: number }> };
@@ -54,6 +60,8 @@ export const createTestApp = (overrides: Record<string, string | undefined> = {}
   const botCalls: Call[] = [];
   const wahaCalls: Call[] = [];
   const presenceCalls: Call[] = [];
+  const lidLookups: LidLookup[] = [];
+  const lidAnswers: TestApp["lidAnswers"] = { next: async () => ({ ok: false, status: 404 }) };
   const inboundSteps: (string | number)[] = [];
   const botAnswers = { next: async (_call: Call) => ({ ok: true, status: 200 }) };
   const wahaAnswers = { next: async (_call: Call) => ({ ok: true, status: 201 }) };
@@ -69,8 +77,15 @@ export const createTestApp = (overrides: Record<string, string | undefined> = {}
 
   const proxyFetch: ProxyFetch = (url, init) => fetch(url, init);
   const botFetch = record(botCalls, botAnswers, () => inboundSteps.push("bot"));
-  const wahaFetch = record(wahaCalls, wahaAnswers);
-  const presenceFetch = record(presenceCalls, presenceAnswers, (url) => inboundSteps.push(new URL(url).pathname));
+  const wahaPost = record(wahaCalls, wahaAnswers);
+  const wahaFetch: WahaFetch = (url, init) => wahaPost(url, { ...init, body: init.body ?? "" });
+  const presencePost = record(presenceCalls, presenceAnswers, (url) => inboundSteps.push(new URL(url).pathname));
+  const presenceFetch: WahaFetch = (url, init) => {
+    if (init.method !== "GET") return presencePost(url, { ...init, body: init.body ?? "" });
+    const call = { url, headers: init.headers };
+    lidLookups.push(call);
+    return lidAnswers.next(call);
+  };
   const presenceSleep = async (ms: number) => void inboundSteps.push(ms);
   const app = buildApp({
     config,
@@ -108,6 +123,8 @@ export const createTestApp = (overrides: Record<string, string | undefined> = {}
     botCalls,
     wahaCalls,
     presenceCalls,
+    lidLookups,
+    lidAnswers,
     inboundSteps,
     botAnswers,
     wahaAnswers,
@@ -142,6 +159,7 @@ export type DeliveryOptions = {
   session?: string;
   event?: string;
   fromMe?: boolean | string;
+  ownId?: string;
   senderAlt?: string;
   sender?: string;
   participant?: string;
@@ -158,6 +176,7 @@ export const delivery = (options: DeliveryOptions = {}): Record<string, unknown>
     event: options.event ?? "message",
     session: options.session ?? SESSION,
     engine: "WEBJS",
+    ...(options.ownId ? { me: { id: options.ownId } } : {}),
     payload: {
       id: options.id ?? `false_${from}_${randomUUID().replaceAll("-", "").toUpperCase()}`,
       timestamp: options.timestampSeconds ?? Math.floor(NOW.getTime() / 1000),

@@ -2,6 +2,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import type pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { dispatchToBot, sweepPendingDispatches } from "../src/bot.ts";
+import { runOutboxOnce } from "../src/outbox.ts";
 import { signBotRequest } from "../src/signature.ts";
 import { verifyConversationToken } from "../src/token.ts";
 import {
@@ -14,7 +15,8 @@ import {
   SESSION,
   type TestApp,
 } from "./app-helpers.ts";
-import { ownerClient } from "./helpers.ts";
+import { clearOutboxForTest, ownerClient } from "./helpers.ts";
+import { createSetup } from "./agenda-helpers.ts";
 
 describe("webhook", () => {
   let test: TestApp;
@@ -118,16 +120,18 @@ describe("webhook", () => {
       ["a status", { from: "status@broadcast" }],
       ["my own message", { fromMe: true }],
       ["an event that is not an incoming message", { event: "message.any" }],
-      ["an empty message", { body: "   " }],
+      ["an empty message", { body: "   ", from: "123456789@lid" }],
     ])("ignores %s: nothing is stored and the bot is not called", async (_name, options) => {
       const contacts = await scalar("select count(*)::int as n from public.contacts");
       const calls = test.botCalls.length;
+      const lookups = test.lidLookups.length;
       const { response, id } = await send(options);
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({ status: "ignored" });
       expect(await messagesWithId(id)).toBe(0);
       expect(await scalar("select count(*)::int as n from public.contacts")).toBe(contacts);
       expect(test.botCalls.length).toBe(calls);
+      expect(test.lidLookups).toHaveLength(lookups);
     });
 
     it("answers a bare 404 for anything that is not a route", async () => {
@@ -163,6 +167,50 @@ describe("webhook", () => {
       );
       const response = await post(test, delivery({ session: "switched-off" }));
       expect(response.json()).toEqual({ status: "unrouted" });
+    });
+  });
+
+
+  describe("team reset", () => {
+    it("only intercepts the exact signed command from a number allowed for its brand", async () => {
+      await clearOutboxForTest(owner);
+      const { brandId, session } = await createSetup(owner);
+      const other = await createSetup(owner);
+      const team = fakePhone();
+      const outsider = fakePhone();
+      await owner.query("insert into core.team_reset_numbers (brand_id, phone_e164) values ($1, $2)", [brandId, team.e164]);
+
+      for (const options of [
+        { session, from: outsider.digits + "@c.us", body: "reiniciar" },
+        { session: other.session, from: team.digits + "@c.us", body: "reiniciar" },
+        { session, from: team.digits + "@c.us", body: "reiniciar " },
+        { session, from: team.digits + "@c.us", body: "Reiniciar" },
+      ]) {
+        const before = test.botCalls.length;
+        expect((await send(options)).response.json()).toEqual({ status: "accepted" });
+        expect(test.botCalls).toHaveLength(before + 1);
+        expect(lastBotBody().mensaje.texto).toBe(options.body.trim());
+      }
+
+      const calls = test.botCalls.length;
+      const chatId = Date.now() + ":2@lid";
+      const resetBody = delivery({ session, from: chatId, senderAlt: team.digits + "@c.us", body: "reiniciar" });
+      expect((await post(test, resetBody, { signature: null })).statusCode).toBe(401);
+      expect((await post(test, resetBody)).json()).toEqual({ status: "reset" });
+      expect((await post(test, resetBody)).json()).toEqual({ status: "duplicate" });
+      await test.app.idle();
+      expect(test.botCalls).toHaveLength(calls);
+
+      const { rows } = await owner.query(
+        "select destination, body, status from core.outbox where brand_id = $1 and destination = $2",
+        [brandId, chatId],
+      );
+      expect(rows).toEqual([{
+        destination: chatId, body: "Listo. Reinicié tu conversación y borré tus datos de prueba.", status: "pending",
+      }]);
+      expect(await runOutboxOnce(test.outboxDeps)).toEqual({ sent: 1, failed: 0 });
+      const sent = test.wahaCalls.find((call) => call.url.endsWith("/api/sendText"))!;
+      expect(JSON.parse(sent.body)).toEqual({ session, chatId, text: rows[0].body });
     });
   });
 
@@ -280,13 +328,65 @@ describe("webhook", () => {
       expect(await scalar("select count(*)::int as n from public.contacts")).toBe(before + 2);
     });
 
-    it("keeps a lid as identity when WhatsApp gives no number", async () => {
-      const lid = `${Date.now()}${Math.floor(Math.random() * 1000)}@lid`;
-      await send({ from: lid });
-      const { rows } = await owner.query("select type, value from core.contact_identities where value = $1", [lid]);
-      expect(rows).toEqual([{ type: "wa_lid", value: lid }]);
-      expect((await owner.query("select phone_jsonb from public.contacts where first_name = 'WhatsApp' order by id desc limit 1")).rows[0].phone_jsonb).toBeNull();
+    it("escalates an unresolved LID once without creating a contact or calling Javier", async () => {
+      const lid = Date.now() + "@lid";
+      const options = { from: lid, ownId: fakePhone().digits + "@c.us" };
+      const original = test.lidAnswers.next;
+      const calls = test.botCalls.length;
+      const contacts = await scalar("select count(*)::int as n from public.contacts");
+      try {
+        test.lidAnswers.next = async () => ({ ok: true, status: 200, json: async () => ({ lid, pn: null }) });
+        const { response, body, id } = await send(options);
+        expect(response.json()).toEqual({ status: "escalated" });
+        expect((await post(test, body)).json()).toEqual({ status: "duplicate" });
+
+        test.lidAnswers.next = async () => ({
+          ok: true, status: 200, json: async () => ({ lid, pn: fakePhone().digits + "@c.us" }),
+        });
+        expect((await post(test, body)).json()).toEqual({ status: "duplicate" });
+        expect(await messagesWithId(id)).toBe(0);
+        expect(await scalar("select count(*)::int as n from public.contacts")).toBe(contacts);
+        expect(await scalar("select count(*)::int as n from core.contact_identities where value = $1", [lid])).toBe(0);
+        expect(test.botCalls.length).toBe(calls);
+        const { rows } = await owner.query(
+          "select chat_id, handled_at from core.waha_lid_escalations where provider_message_id = $1", [id],
+        );
+        expect(rows).toEqual([{ chat_id: lid, handled_at: null }]);
+      } finally {
+        test.lidAnswers.next = original;
+      }
     });
+
+    it("resolves the LID with WAHA, reuses the phone identity and keeps the incoming chat address", async () => {
+      const phone = fakePhone();
+      const lid = Date.now() + "@lid";
+      const chat = lid.replace("@lid", ":2@lid");
+      const earlier = await send({ from: phone.digits + "@c.us" });
+      const original = test.lidAnswers.next;
+      try {
+        test.lidAnswers.next = async () => ({
+          ok: true, status: 200, json: async () => ({ lid, pn: phone.digits + "@c.us" }),
+        });
+        const { response, id } = await send({ from: chat, ownId: fakePhone().digits + "@c.us" });
+        expect(response.json()).toEqual({ status: "accepted" });
+        expect(new URL(test.lidLookups.at(-1)!.url).pathname).toBe("/api/" + SESSION + "/lids/" + lid.split("@")[0]);
+        const { rows } = await owner.query(
+          `select m.conversation_id::int, m.waha_chat_id, i.type, i.value
+           from core.messages m join core.conversations c on c.id = m.conversation_id
+           join core.contact_identities i on i.id = c.identity_id
+           where m.provider_message_id = any($1::text[]) order by m.id`,
+          [[earlier.id, id]],
+        );
+        expect(rows).toHaveLength(2);
+        expect(rows[1]).toEqual({
+          conversation_id: rows[0].conversation_id, waha_chat_id: chat, type: "phone_e164", value: phone.e164,
+        });
+        expect(JSON.parse(test.presenceCalls.at(-1)!.body).chatId).toBe(chat);
+      } finally {
+        test.lidAnswers.next = original;
+      }
+    });
+
 
     it("finds the number in SenderAlt when the chat id is a lid", async () => {
       const phone = fakePhone();

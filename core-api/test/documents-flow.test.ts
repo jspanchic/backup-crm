@@ -6,7 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { PdfEngineError } from "../src/documents/gotenberg.ts";
 import { runOutboxOnce } from "../src/outbox.ts";
 import { at, createSetup, day, freeTimes, startLead, toolCall, type Lead, type Setup } from "./agenda-helpers.ts";
-import { createTestApp, type TestApp } from "./app-helpers.ts";
+import { createTestApp, delivery, NOW, post, type TestApp } from "./app-helpers.ts";
 import { clearOutboxForTest, ownerClient } from "./helpers.ts";
 
 /** The documents the bot flow produces by itself: the quote at `cotizar`, the orders at `confirmar`. */
@@ -94,6 +94,50 @@ describe("documents in the bot flow", () => {
       expect(documents[2].display_number).toMatch(/^PRUEBA-OT-/);
       // The quote and the purchase order are queued for the customer; the work order is not.
       expect((await queuedFiles(l)).map((entry) => entry.document_type)).toEqual(["quote", "purchase_order"]);
+    });
+
+    it("sends confirmation and automatic PDFs to the triggering LID after a later phone alias", async () => {
+      const setup = await brand(true);
+      const l = await quoted(setup);
+      const lidChat = `${l.phone.digits}000@lid`;
+      const phoneChat = `${l.phone.digits}@c.us`;
+      const dispatches = test.botCalls.length;
+      const lid = await post(test, delivery({ session: setup.session, from: lidChat, senderAlt: phoneChat }));
+      expect(lid.json()).toEqual({ status: "accepted" });
+      await test.app.idle();
+      expect(test.botCalls).toHaveLength(dispatches + 1);
+      const { token } = JSON.parse(test.botCalls[dispatches].body) as { token: string };
+
+      const newer = await post(test, delivery({
+        session: setup.session, from: phoneChat, timestampSeconds: Math.floor(NOW.getTime() / 1000) + 1,
+      }));
+      expect(newer.json()).toEqual({ status: "accepted" });
+      await test.app.idle();
+
+      const response = await toConfirmation({ ...l, token });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ confirmado: true, pdf: "en_cola" });
+      const { rows } = await owner.query(
+        `select o.destination, d.document_type from core.outbox o
+         left join core.document_files f on f.id = o.document_file_id
+         left join core.documents d on d.id = f.document_id
+         where o.conversation_id = $1 order by o.id`,
+        [l.conversationId],
+      );
+      expect(rows).toEqual([
+        { destination: lidChat, document_type: "quote" },
+        { destination: lidChat, document_type: null },
+        { destination: lidChat, document_type: "purchase_order" },
+      ]);
+
+      const { rows: [manual] } = await owner.query(
+        `select api.enqueue_document(d.id, f.id, $2) as id
+         from core.documents d join core.document_files f on f.document_id = d.id
+         where d.deal_id = $1 and d.document_type = 'quote'`,
+        [l.dealId, "Copia manual"],
+      );
+      const { rows: [copy] } = await owner.query("select destination from core.outbox where id = $1", [manual.id]);
+      expect(copy.destination).toBe(phoneChat);
     });
 
     it("does not break the quote when the PDF engine is down, and says no PDF was sent", async () => {

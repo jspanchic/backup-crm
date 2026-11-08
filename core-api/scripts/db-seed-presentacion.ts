@@ -138,7 +138,7 @@ try {
     await client.query(`
       truncate table
         public.contacts, public.deals, public.companies, public.tasks, public.contact_notes, public.deal_notes,
-        core.contact_identities, core.unrouted_events
+        core.contact_identities, core.unrouted_events, core.waha_lid_escalations, core.team_reset_receipts
       restart identity cascade`);
     // The numbers of the test series (PRUEBA-COT, PRUEBA-OC, PRUEBA-OT) start again; the real series is not touched.
     await client.query(`update core.document_counters set last_number = 0 where is_test`);

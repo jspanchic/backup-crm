@@ -39,11 +39,13 @@ const attempt = async (deps: AutomaticDeps, label: string, work: () => Promise<u
   }
 };
 
-const issueAndMaybeSend = async (deps: AutomaticDeps, target: Target, type: DocumentType, send: boolean): Promise<boolean> =>
+const issueAndMaybeSend = async (
+  deps: AutomaticDeps, target: Target, type: DocumentType, send: boolean, inboundMessageId?: number,
+): Promise<boolean> =>
   attempt(deps, type, async () => {
     const document = await issueDocument(deps, { dealId: target.deal_id, documentType: type, appointmentId: type === "quote" ? null : target.appointment_id });
     // Only the call that created the document sends it: a document that already existed was handled before.
-    if (send && document.created) await sendDocument(deps, document.id, "bot");
+    if (send && document.created) await sendDocument(deps, document.id, "bot", inboundMessageId);
   });
 
 /**
@@ -60,24 +62,28 @@ const eligibleTarget = async (deps: AutomaticDeps, conversationId: number): Prom
 const canSendToCustomer = (target: Target): boolean => target.is_test || target.pdf_clientes_reales;
 
 /** Starts the quote PDF for the conversation's deal. Resolves with what the bot may say about it. */
-export const documentForQuote = async (deps: AutomaticDeps, conversationId: number): Promise<DocumentOutcome> => {
+export const documentForQuote = async (
+  deps: AutomaticDeps, conversationId: number, inboundMessageId?: number,
+): Promise<DocumentOutcome> => {
   let target: Target | null = null;
   const ok = await attempt(deps, "target", async () => {
     target = await eligibleTarget(deps, conversationId);
   });
   if (!ok || !target || !canSendToCustomer(target)) return { documento: "no_disponible" };
-  const done = await issueAndMaybeSend(deps, target, "quote", true);
+  const done = await issueAndMaybeSend(deps, target, "quote", true, inboundMessageId);
   return { documento: done ? "en_cola" : "no_disponible" };
 };
 
 /** Starts the purchase order (sent) and the work order (issued only) once the appointment is confirmed. */
-export const documentsForConfirmation = async (deps: AutomaticDeps, conversationId: number): Promise<DocumentOutcome> => {
+export const documentsForConfirmation = async (
+  deps: AutomaticDeps, conversationId: number, inboundMessageId?: number,
+): Promise<DocumentOutcome> => {
   let target: Target | null = null;
   const ok = await attempt(deps, "target", async () => {
     target = await eligibleTarget(deps, conversationId);
   });
   if (!ok || !target) return { documento: "no_disponible" };
-  const order = canSendToCustomer(target) && await issueAndMaybeSend(deps, target, "purchase_order", true);
+  const order = canSendToCustomer(target) && await issueAndMaybeSend(deps, target, "purchase_order", true, inboundMessageId);
   // The work order does not depend on the purchase order: one failing does not stop the other.
   await issueAndMaybeSend(deps, target, "work_order", false);
   return { documento: order ? "en_cola" : "no_disponible" };

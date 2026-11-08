@@ -107,7 +107,9 @@ export const readDocumentPdf = async (deps: DocumentsDeps, documentId: number): 
  * Queues the file for the customer. Real deliveries require confirmed legal texts and the brand switch,
  * which the database checks when it creates the outbox entry.
  */
-export const sendDocument = async (deps: DocumentsDeps, documentId: number, sender: "human" | "bot" = "human"): Promise<{ outboxId: number }> => {
+export const sendDocument = async (
+  deps: DocumentsDeps, documentId: number, sender: "human" | "bot" = "human", inboundMessageId?: number,
+): Promise<{ outboxId: number }> => {
   const file = await currentFile(deps.db, documentId);
   if (!file) throw new DocumentError("no_file", "the document has no file");
   const settings = await readSettings(templatesDirOf(deps.config));
@@ -115,7 +117,9 @@ export const sendDocument = async (deps: DocumentsDeps, documentId: number, send
     throw new DocumentError("legal_unconfirmed", "the legal texts are not confirmed, so real customers do not receive documents yet");
   }
   const caption = captionFor({ document_type: file.document_type, display_number: file.display_number }, settings);
-  const { rows } = await deps.db.query<{ id: number }>("select api.enqueue_document($1, $2, $3, $4) as id", [documentId, file.id, caption, sender]);
+  const { rows } = await deps.db.query<{ id: number }>("select api.enqueue_document($1, $2, $3, $4, $5) as id", [
+    documentId, file.id, caption, sender, inboundMessageId ?? null,
+  ]);
   return { outboxId: rows[0].id };
 };
 

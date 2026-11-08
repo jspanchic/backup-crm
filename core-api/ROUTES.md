@@ -6,7 +6,7 @@ registradas: agregar una ruta sin documentarla la hace fallar.
 | Método | Ruta | Quién | Protección |
 |---|---|---|---|
 | GET | `/healthz` | Local | Sin datos |
-| POST | `/hooks/whatsapp` | WAHA, solo red interna | HMAC-SHA512 sobre el cuerpo crudo, comparación en tiempo constante, timestamp de máximo 5 min. Duplicados descartados por `payload.id` |
+| POST | `/hooks/whatsapp` | WAHA, solo red interna | HMAC-SHA512 sobre el cuerpo crudo, comparación en tiempo constante, timestamp de máximo 5 min. Duplicados descartados por canal y `payload.id`. Los LID sin teléfono confiable quedan en revisión manual. El comando de reinicio del equipo se valida por marca |
 | GET | `/tools/ficha` | Bot (n8n), solo red interna | Token de conversación de 15 min. Sin parámetros |
 | POST | `/tools/guardar_datos` | Bot | Token. Esquema estricto: un campo de más, incluido cualquier id, da 400 |
 | POST | `/tools/cotizar` | Bot | Token. Esquema estricto. No acepta montos: los calcula la base |

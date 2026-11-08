@@ -239,7 +239,7 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
     return rows[0].result;
   });
 
-  tool("POST", "/tools/cotizar", { schema: quoteSchema }, async ({ conversationId }, input) => {
+  tool("POST", "/tools/cotizar", { schema: quoteSchema }, async ({ conversationId, inboundMessageId }, input) => {
     const { rows } = await deps.db.query("select api.create_quote($1, $2::jsonb) as quote", [
       conversationId,
       JSON.stringify(withoutUndefined(toQuoteInputs(input))),
@@ -261,7 +261,7 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
       impuesto_pct: quote.tax_pct,
       // The prices are examples until JM confirms them: the bot must not present them as final.
       precios_confirmados: quote.price_confirmed,
-      ...pdfNotice(await documentForQuote(documents, conversationId), "la cotización"),
+      ...pdfNotice(await documentForQuote(documents, conversationId, inboundMessageId), "la cotización"),
     };
   });
 
@@ -295,7 +295,7 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
     return { ...rows[0].result, aviso: "Es una reserva provisional: se confirma con confirmar cuando el cliente acepte la orden de compra." };
   });
 
-  tool("POST", "/tools/confirmar", { schema: confirmSchema, agenda: true }, async ({ conversationId }, _input, reply) => {
+  tool("POST", "/tools/confirmar", { schema: confirmSchema, agenda: true }, async ({ conversationId, inboundMessageId }, _input, reply) => {
     const { rows } = await deps.db.query<{ facts: ReplyFacts & { language: string | null } }>("select api.reply_facts($1) as facts", [conversationId]);
     const facts = rows[0].facts;
     const hold = facts.appointment;
@@ -306,15 +306,15 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
     // in the same transaction: the customer is never told something the database does not hold.
     const message = confirmationMessage(hold.start_at, facts.timezone, languageOf(facts));
     const confirmed = await deps.db.query<{ result: { inicio: string; fin: string } }>(
-      "select api.confirm_hold($1, $2::timestamptz, $3) as result",
-      [conversationId, hold.start_at, message],
+      "select api.confirm_hold($1, $2::timestamptz, $3, $4) as result",
+      [conversationId, hold.start_at, message, inboundMessageId ?? null],
     );
     return {
       confirmado: true,
       ...confirmed.rows[0].result,
       mensaje_enviado: true,
       aviso: "No escribas tú el mensaje de confirmación: ya se envió.",
-      ...pdfNotice(await documentsForConfirmation(documents, conversationId), "la orden de compra"),
+      ...pdfNotice(await documentsForConfirmation(documents, conversationId, inboundMessageId), "la orden de compra"),
     };
   });
 

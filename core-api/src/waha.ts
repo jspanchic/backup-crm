@@ -7,12 +7,13 @@ import { redactCards } from "./redact.ts";
 const envelope = z.object({
   event: z.string().max(40).optional(),
   session: z.string().min(1).max(100),
+  me: z.object({ id: z.string().max(200).optional() }).nullish(),
   payload: z.object({
     id: z.string().min(1).max(300),
     timestamp: z.number().optional(),
     from: z.string().max(200).optional(),
     fromMe: z.union([z.boolean(), z.string()]).optional(),
-    participant: z.string().max(200).optional(),
+    participant: z.string().max(200).nullish(),
     body: z.string().max(10_000).nullish(),
     hasMedia: z.boolean().optional(),
     media: z.object({}).nullish(),
@@ -63,7 +64,10 @@ const isOwnOrForeign = (delivery: WahaDelivery): boolean => {
   return false;
 };
 
-const chatPart = (value: string): string => value.split("@")[0].split(":")[0];
+export const phoneFromWahaId = (value: string): string | null => {
+  const phone = /^(\+?\d+)(?::\d+)?(?:@(c\.us|s\.whatsapp\.net))?$/.exec(value);
+  return phone ? toE164(phone[1]) : null;
+};
 const mediaTypes = new Set(["audio", "ptt", "voice", "image", "video", "document", "sticker"]);
 
 export type Accepted = {
@@ -73,6 +77,8 @@ export type Accepted = {
   body: string;
   phone: string | null;
   lid: string | null;
+  ownPhone: string | null;
+  resetRequested: boolean;
   pushName: string | null;
 };
 
@@ -83,22 +89,25 @@ export const toAccepted = (delivery: WahaDelivery, now: Date): { ignore: true } 
 
   const { payload } = delivery;
   const info = payload._data?.Info ?? {};
-  const candidates = [info.SenderAlt, info.Sender, payload.participant, payload.from]
-    .filter((value): value is string => Boolean(value) && !value!.includes("@lid"))
-    .map((value) => chatPart(value));
+  const text = (payload.body ?? "").trim();
+  const hasFile = Boolean(payload.hasMedia || payload.media || mediaTypes.has(payload.type ?? ""));
+  if (!text && !hasFile) return { ignore: true };
 
-  let phone: string | null = null;
-  for (const candidate of candidates) {
-    phone = toE164(candidate);
-    if (phone) break;
-  }
   const sender = /^(\d+)(?::\d+)?@(c\.us|s\.whatsapp\.net|lid)$/.exec(payload.from ?? "");
   const lid = sender?.[2] === "lid" ? `${sender[1]}@lid` : null;
+  const ownPhone = delivery.me?.id ? phoneFromWahaId(delivery.me.id) : null;
+  // GOWS supplies the sender-side phone in SenderAlt. Recipient fields cannot identify a LID sender.
+  const candidates = lid ? [info.SenderAlt, info.Sender] : [info.SenderAlt, info.Sender, payload.participant, payload.from];
+  let phone: string | null = null;
+  for (const candidate of candidates) {
+    const normalized = candidate ? phoneFromWahaId(candidate) : null;
+    if (normalized && normalized !== ownPhone) {
+      phone = normalized;
+      break;
+    }
+  }
   if (!phone && !lid) return { ignore: true };
-  const chatId = lid ?? `${sender?.[1] ?? phone!.slice(1)}@c.us`;
-
-  const text = (payload.body ?? "").trim();
-  if (!text && !payload.hasMedia && !payload.media && !mediaTypes.has(payload.type ?? "")) return { ignore: true };
+  const chatId = lid ? payload.from! : `${sender?.[1] ?? phone!.slice(1)}@c.us`;
 
   const seconds = payload.timestamp;
   const sentAt = seconds && seconds > 1_000_000_000 && seconds < 100_000_000_000 ? new Date(seconds * 1000) : now;
@@ -112,6 +121,8 @@ export const toAccepted = (delivery: WahaDelivery, now: Date): { ignore: true } 
       body: text ? redactCards(text) : "[El cliente envió un audio o archivo sin texto]",
       phone,
       lid: phone ? null : lid,
+      ownPhone,
+      resetRequested: payload.body === "reiniciar" && !hasFile,
       pushName: info.PushName ?? payload.notifyName ?? null,
     },
   };

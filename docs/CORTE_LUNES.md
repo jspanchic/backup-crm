@@ -5,7 +5,7 @@ La sesión `salvionix` usa WAHA GOWS 2026.9.2 con el chip real. El flujo será `
 ## a. Desplegar con el envío apagado
 
 - [ ] Confirmar con Joel el acceso, la arquitectura, la capacidad y la red Docker compartida por WAHA y n8n. Usar las verificaciones de la [guía del VPS](DESPLIEGUE_VPS_PRUEBAS.md#a-verificaciones-previas-en-el-vps-solo-lectura). En el VPS se necesita Bash, `jq`, `timeout` y Docker Compose 2.24.4 o posterior para aplicar el archivo de producción. [Referencia de Docker Compose](https://docs.docker.com/reference/compose-file/merge/#replace-value).
-- [ ] Preparar el webhook activo de la copia de Javier en `/webhook/<ruta-de-la-copia>`. En producción, las herramientas usan `http://salvionix-core-api-production:8080`. Configurar `horarios_libres`, `reservar` y `confirmar` para habilitarlas en i. `horarios_libres` recibe el ZIP del servicio. Con la agenda apagada, las tres devuelven `409 agenda_apagada` y Javier debe ofrecer atención manual. Usar `responder` con el token de conversación y el texto. `core-api` conserva `session` y `chatId`. Desactivar en la copia los nodos que llaman directamente a WAHA o aplican sus esperas. Una nota de voz o un archivo sin texto llega como aviso de texto. Si `cotizar` devuelve `impuesto_pct=0`, omitir el renglón de impuesto en el mensaje al cliente. Verificar que la copia rechaza una firma inválida antes de ejecutar las herramientas. [Guía de pruebas](DESPLIEGUE_VPS_PRUEBAS.md#d-conexión-con-n8n).
+- [ ] Preparar el webhook activo de la copia de Javier en `/webhook/<ruta-de-la-copia>`. En producción, las herramientas usan `http://salvionix-core-api-production:8080`. Configurar `horarios_libres`, `reservar` y `confirmar` para habilitarlas en i. `horarios_libres` recibe el ZIP del servicio. Con la agenda apagada, las tres devuelven `409 agenda_apagada` y Javier debe ofrecer atención manual. Usar `responder` con el token de conversación y el texto. `core-api` conserva `session` y `chatId`. Desactivar en la copia los nodos que llaman directamente a WAHA o aplican sus esperas. Retirar de la copia el reinicio legado. `core-api` aplica la lista por marca y Javier recibe el texto normal de los números fuera de la lista. Una nota de voz o un archivo sin texto llega como aviso de texto. Si `cotizar` devuelve `impuesto_pct=0`, omitir el renglón de impuesto en el mensaje al cliente. Verificar que la copia rechaza una firma inválida antes de ejecutar las herramientas. [Guía de pruebas](DESPLIEGUE_VPS_PRUEBAS.md#d-conexión-con-n8n).
 
 En el PC, desde la raíz del repo, construir para la arquitectura que devuelve `uname -m` en el VPS. Para `aarch64`, poner `linux/arm64` en `$plataforma`.
 
@@ -68,7 +68,8 @@ SELECT count(*) AS contacts FROM public.contacts;
 SELECT count(*) AS queued FROM core.outbox WHERE status IN ('pending', 'sending');
 SELECT count(*) AS uncertain FROM core.outbox WHERE starts_with(last_error, 'delivery_uncertain');
 SELECT filename FROM core.schema_migrations WHERE filename IN ('0022_waha_outbox_pacing.sql', '0023_real_pdf_delivery.sql',
-  '0024_production_availability.sql', '0025_escalation_task.sql', '0026_production_agenda_panel.sql') ORDER BY filename;
+  '0024_production_availability.sql', '0025_escalation_task.sql', '0026_production_agenda_panel.sql',
+  '0027_waha_lid_escalations.sql', '0028_team_reset.sql', '0029_confirmation_reply_chat.sql', '0030_document_reply_chat.sql') ORDER BY filename;
 SQL
 "${crm[@]}" exec -T gateway wget -qO- http://127.0.0.1:8080/healthz
 read -r -p 'Contenedor de n8n: ' N8N_CONTAINER
@@ -125,6 +126,41 @@ unset operator_email operator_sub
 ```powershell
 $vps = Read-Host 'Usuario y host SSH del VPS (usuario@host)'
 ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:18089:127.0.0.1:8089 $vps
+```
+
+### Autorizar el reinicio de pruebas
+
+- [ ] Registrar solo números propios del equipo dedicados al ensayo. La lista queda vacía al instalar y se configura por marca en el VPS. Dar de alta cada número antes de iniciar el ensayo, con código de país y formato E.164. La consulta muestra solo los últimos cuatro dígitos.
+
+```bash
+read -rs -p 'Número del equipo en E.164: ' team_phone; printf '\n'
+if [[ $team_phone =~ ^[+][1-9][0-9]{7,14}$ ]]; then
+  sql -v team_phone="$team_phone" <<'SQL'
+INSERT INTO core.team_reset_numbers (brand_id, phone_e164)
+SELECT id, :'team_phone' FROM core.brands WHERE slug = 'salvionix'
+ON CONFLICT DO NOTHING;
+SELECT b.slug, right(n.phone_e164, 4) AS ultimos_4
+FROM core.team_reset_numbers n JOIN core.brands b ON b.id = n.brand_id
+WHERE b.slug = 'salvionix' AND n.phone_e164 = :'team_phone';
+SQL
+else
+  printf '%s\n' 'Usar formato E.164 con código de país.'
+fi
+unset team_phone
+```
+
+- [ ] Desde el número aprobado, escribir exactamente `reiniciar` en un chat directo. Esperar «Listo. Reinicié tu conversación y borré tus datos de prueba.» en ese chat y comprobar que el siguiente mensaje empieza una ficha nueva. El contacto nuevo de un número aprobado entra como prueba. El comando protege fichas reales preexistentes y registros compartidos. Desde un número fuera de la lista, Javier recibe el mensaje como texto normal. La respuesta fija usa la cola y el interruptor de salida de WAHA. Los PDF borrados quedan fuera del CRM. Sus archivos sin referencia quedan en el volumen privado hasta su limpieza de mantenimiento.
+
+- [ ] Al cerrar el ensayo, retirar cada número de la lista. Las fichas que ya eran de prueba conservan esa clasificación.
+
+```bash
+read -rs -p 'Número E.164 que se retira: ' team_phone; printf '\n'
+sql -v team_phone="$team_phone" <<'SQL'
+DELETE FROM core.team_reset_numbers n USING core.brands b
+WHERE n.brand_id = b.id AND b.slug = 'salvionix' AND n.phone_e164 = :'team_phone'
+RETURNING b.slug, right(n.phone_e164, 4) AS ultimos_4;
+SQL
+unset team_phone
 ```
 
 ## b. Probar en la pila aislada
@@ -404,6 +440,7 @@ FROM resumed r CROSS JOIN attended a;
 SQL
 ```
 
+
 ## g. Revisar la primera hora
 
 ```bash
@@ -431,7 +468,30 @@ SQL
 ```
 
 - [ ] Vigilar `401` de firma, `400` de payload, `5xx`, `bot rejected the message`, `bot call failed`, `outbox send failed`, cola que crece y sesiones WAHA que salen de `WORKING`. Un `200` de entrada no confirma ni la ejecución en n8n ni el envío al cliente.
-- [ ] Revisar en `core-api` el ritmo, las reprogramaciones y los casos `delivery_uncertain`. Cada caso incierto detiene su chat. Revisar las ejecuciones en n8n, las tareas y citas en el panel y cualquier señal de restricción del chip en WAHA. Guardar evidencia con conteos, códigos y estados. Mantener los archivos privados de rollback accesibles hasta cerrar la ventana con Joel.
+- [ ] Revisar en `core-api` el ritmo, las reprogramaciones y los casos `delivery_uncertain`. Cada caso incierto detiene su chat. Revisar las ejecuciones en n8n, las tareas y citas en el panel, la cola de escalaciones LID y cualquier señal de restricción del chip en WAHA. Guardar evidencia con conteos, códigos y estados. Mantener los archivos privados de rollback accesibles hasta cerrar la ventana con Joel.
+
+### Revisar escalaciones de WhatsApp sin teléfono resuelto
+
+GOWS 2026.9.2 puede devolver el teléfono de la propia sesión al consultar un LID. `core-api` descarta ese resultado. Un caso sin teléfono confiable queda en esta cola para revisión manual con su chat original y sin alta de cliente. Para el seguimiento, el operador busca el mensaje en WAHA y atiende el chat correspondiente. [Corrección publicada por WAHA](https://github.com/devlikeapro/waha/releases/tag/2026.10.1).
+
+```bash
+sql <<'SQL'
+SELECT e.id, c.identifier AS session, e.chat_id, e.provider_message_id, e.created_at
+FROM core.waha_lid_escalations e
+JOIN core.channels c ON c.id = e.channel_id
+JOIN core.brands b ON b.id = c.brand_id
+WHERE b.slug = 'salvionix' AND e.handled_at IS NULL
+ORDER BY e.created_at, e.id;
+SQL
+read -r -p 'ID de la escalación LID atendida: ' escalation_id
+sql -v escalation_id="$escalation_id" <<'SQL'
+UPDATE core.waha_lid_escalations e SET handled_at = now()
+FROM core.channels c JOIN core.brands b ON b.id = c.brand_id
+WHERE e.channel_id = c.id AND b.slug = 'salvionix'
+  AND e.id = :'escalation_id'::bigint AND e.handled_at IS NULL
+RETURNING e.id, e.handled_at;
+SQL
+```
 
 ### Conciliar una entrega incierta
 
