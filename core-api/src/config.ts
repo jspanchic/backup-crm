@@ -19,6 +19,7 @@ const schema = z.object({
 
   WAHA_BASE_URL: z.url().default("http://127.0.0.1:3100"),
   WAHA_API_KEY: z.string().optional(),
+  WAHA_SEND_ENABLED: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
   OUTBOX_PACE_MIN_MS: z.coerce.number().int().min(0).default(2000),
   OUTBOX_PACE_MAX_MS: z.coerce.number().int().min(0).default(5000),
 
@@ -30,7 +31,7 @@ const schema = z.object({
   TEMPLATES_DIR: z.string().min(1).optional(),
 
   // Development only. Production authenticates the panel with Cloudflare Access (CRM-T3).
-  ADMIN_DEV_SUB: z.uuid().optional(),
+  ADMIN_DEV_SUB: z.preprocess((value) => (value === "" ? undefined : value), z.uuid().optional()),
   ADMIN_ALLOWED_ORIGINS: z.string().default("http://127.0.0.1:5173,http://localhost:5173"),
 });
 

@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "currency": "USD",
+  "covered_rate": 0.12,
+  "uncovered_rate": 0.06,
+  "discount_pct": 7,
+  "min_total": 150,
+  "tax_pct": 0,
+  "rounding": "salvionix_v4",
+  "area_factors_provisional": true,
+  "home_base_sqft": 1000,
+  "home_bedroom_sqft": 140,
+  "parking_first_car_sqft": 240,
+  "parking_extra_car_sqft": 200,
+  "sqm_to_sqft": 10.76,
+  "pace_to_ft": 2.5,
+  "controls": [
+    { "covered_sqft": 1731, "uncovered_sqft": 0, "subtotal": 208, "discount": 15, "total": 193, "min_applied": false },
+    { "covered_sqft": 8000, "uncovered_sqft": 3000, "subtotal": 1140, "discount": 80, "total": 1060, "min_applied": false },
+    { "covered_sqft": 1000, "uncovered_sqft": 0, "subtotal": 120, "discount": 8, "total": 150, "min_applied": true }
+  ]
+}

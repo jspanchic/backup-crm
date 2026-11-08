@@ -91,7 +91,7 @@ Los montos **los calcula la base**; la plantilla solo los muestra.
 | `quote.subtotal`, `quote.total` | Importes con moneda, por ejemplo `$221.07`. El total ya incluye el impuesto |
 | `quote.discount` | El descuento como deducción, por ejemplo `-$15.62` |
 | `quote.discount_class` | Vacío si el descuento se aplicó; `hidden` si la marca lo tenía apagado o no descontó nada (la plantilla no tiene condiciones: esa clase oculta la fila con CSS) |
-| `quote.tax_label`, `quote.tax` | `Impuesto (6.5%)` y su importe. Con tasa 0 sale `Impuesto (0%)` y `$0.00` |
+| `quote.tax_label`, `quote.tax`, `quote.tax_class` | Tasa e importe del impuesto. Con tasa 0, `tax_class` oculta la fila |
 | `quote.minimum_note` | `Se aplicó el cargo mínimo del servicio.` si corresponde; si no, vacío |
 | `quote.price_note` | `Precios por confirmar.` mientras la lista de precios no esté confirmada; si no, vacío (la plantilla de la cotización ya no la imprime) |
 

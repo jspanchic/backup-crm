@@ -63,7 +63,33 @@ En el VPS de pruebas: `docker compose exec -T db psql -U postgres -d salvionix -
 
 ## 3. Lo demás que sigue siendo de ejemplo
 
-- **Lista de precios:** los precios son una lista de ejemplo marcada «por confirmar». Los precios no se editan: se crea una **versión nueva** en `core.price_lists` (las versiones anteriores y sus cotizaciones quedan intactas).
+- **Lista de precios:** la presentación usa una lista de ejemplo marcada «por confirmar». Para la lista de producción, usa el importador de la sección siguiente.
 - **Textos legales y datos de la empresa:** `core-api/templates/settings.json`. Mientras digan `[POR CONFIRMAR]`, a los clientes reales no se les emite ni se les envía ningún PDF (`confirmed: false`).
 - **Responsable de las cuentas, canal de WhatsApp y marca:** los crea la semilla de ejemplo (`db/seeds/sample/`); la cuenta real se crea en el panel.
 - **Numeración de documentos:** la serie real (`COT`, `OC`, `OT`) empieza donde se indique en `core.document_counters`; la de prueba (`PRUEBA-*`) se reinicia con cada `limpio`.
+
+## 4. Archivo de precios de producción
+
+Las reglas de producción están en [precios-salvionix.json](../infra/vps/precios-salvionix.json). Edita allí los valores de la marca. Para cargar un cambio, sube `version` a un número mayor. Usa números JSON con punto decimal.
+
+| Campo | Qué controla |
+|---|---|
+| `covered_rate`, `uncovered_rate` | Tarifas en USD por pie cuadrado cubierto y descubierto, con hasta cuatro decimales |
+| `discount_pct`, `min_total` | Descuento porcentual en escala 0 a 100 y mínimo en USD, con hasta dos decimales |
+| `tax_pct` | El importador verifica que la marca esté configurada con el impuesto aprobado de 0% |
+| `rounding` | `salvionix_v4` suma y redondea hacia abajo el metraje cubierto y el descubierto por separado. Redondea el subtotal al dólar más cercano, aplica el porcentaje al subtotal redondeado y redondea el descuento al dólar más cercano. En ambos importes, medio dólar sube. El total es subtotal menos descuento y luego se aplica el mínimo. |
+| `home_base_sqft`, `home_bedroom_sqft` | Pies cuadrados base de una casa y adicional por habitación |
+| `parking_first_car_sqft`, `parking_extra_car_sqft` | Pies cuadrados por el primer auto y por cada auto adicional |
+| `sqm_to_sqft`, `pace_to_ft` | Conversión de metros cuadrados a pies cuadrados y de pasos a pies |
+| `area_factors_provisional` | `true` indica que los factores de estimación usan los valores de ejemplo hasta recibir la tabla de v4. Cambia a `false` en una nueva versión cuando se confirmen. Las tarifas y el descuento de esta lista ya están aprobados. |
+| `controls` | Tres casos con los metrajes y los resultados esperados. Recalcula sus importes y revisa cuándo se aplica el mínimo al cambiar la tarifa o la fórmula. |
+
+Sigue el comando de [CORTE_LUNES.md](CORTE_LUNES.md). El importador activa la lista y cierra la anterior en una sola transacción si pasan los tres controles en PostgreSQL.
+
+| Pies² cubiertos | Pies² descubiertos | Subtotal | Descuento | Total | Aplica mínimo |
+|---:|---:|---:|---:|---:|---|
+| 1.731 | 0 | $208 | $15 | $193 | No |
+| 8.000 | 3.000 | $1.140 | $80 | $1.060 | No |
+| 1.000 | 0 | $120 | $8 | $150 | Sí |
+
+Repetir el archivo activo con las mismas reglas devuelve `already active`. Las cotizaciones emitidas conservan su lista y sus importes.

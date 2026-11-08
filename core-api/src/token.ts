@@ -5,7 +5,7 @@ export const TOKEN_TTL_SECONDS = 15 * 60;
 const ISSUER = "core-api";
 const AUDIENCE = "bot-tools";
 
-export type ConversationClaims = { brandId: number; conversationId: number };
+export type ConversationClaims = { brandId: number; conversationId: number; botGeneration?: number };
 
 /** The token carries the conversation and nothing about the customer. The tools take no id from the caller. */
 export const signConversationToken = async (
@@ -13,7 +13,7 @@ export const signConversationToken = async (
   claims: ConversationClaims,
   now: Date = new Date(),
 ): Promise<string> =>
-  new SignJWT({ brd: claims.brandId, cnv: claims.conversationId })
+  new SignJWT({ brd: claims.brandId, cnv: claims.conversationId, gen: claims.botGeneration })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setIssuer(ISSUER)
     .setAudience(AUDIENCE)
@@ -37,9 +37,12 @@ export const verifyConversationToken = async (
       currentDate: now,
       requiredClaims: ["exp", "iat", "jti", "brd", "cnv"],
     });
-    const { brd, cnv } = payload as { brd?: unknown; cnv?: unknown };
+    const { brd, cnv, gen } = payload;
     if (!Number.isSafeInteger(brd) || !Number.isSafeInteger(cnv)) return { ok: false };
-    return { ok: true, claims: { brandId: brd as number, conversationId: cnv as number } };
+    if (gen !== undefined && (typeof gen !== "number" || !Number.isSafeInteger(gen) || gen < 0)) return { ok: false };
+    const claims: ConversationClaims = { brandId: brd as number, conversationId: cnv as number };
+    if (gen !== undefined) claims.botGeneration = gen;
+    return { ok: true, claims };
   } catch {
     return { ok: false };
   }

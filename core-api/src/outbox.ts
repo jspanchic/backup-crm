@@ -51,6 +51,7 @@ const payloadOf = async (deps: OutboxDeps, item: Claimed): Promise<Record<string
  * Nothing leaves the system any other way: not the bot, not n8n.
  */
 export const runOutboxOnce = async (deps: OutboxDeps, limit = 10): Promise<{ sent: number; failed: number }> => {
+  if (!deps.config.WAHA_SEND_ENABLED) return { sent: 0, failed: 0 };
   const { rows } = await deps.db.query<Claimed>("select * from api.claim_outbox($1)", [limit]);
   let sent = 0;
   let failed = 0;
@@ -59,13 +60,19 @@ export const runOutboxOnce = async (deps: OutboxDeps, limit = 10): Promise<{ sen
     if (index > 0) await deps.sleep(paceMs(deps));
     let error: string | null = null;
     try {
+      const body = JSON.stringify(await payloadOf(deps, item));
+      const { rows: [control] } = await deps.db.query<{ sendable: boolean }>(
+        "select api.outbox_sendable($1, $2) as sendable",
+        [item.id, item.attempts],
+      );
+      if (!control.sendable) continue;
       const response = await deps.fetch(`${deps.config.WAHA_BASE_URL}/api/${item.file_sha256 ? "sendFile" : "sendText"}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(deps.config.WAHA_API_KEY ? { "X-Api-Key": deps.config.WAHA_API_KEY } : {}),
         },
-        body: JSON.stringify(await payloadOf(deps, item)),
+        body,
         signal: AbortSignal.timeout(15_000),
       });
       if (!response.ok) error = `WAHA answered ${response.status}`;

@@ -109,6 +109,7 @@ services:
       # Points at nothing by default (the name never resolves), so the outbox cannot reach real WhatsApp.
       WAHA_BASE_URL: ${WAHA_BASE_URL:-http://waha.invalid:3000}
       WAHA_API_KEY: ${WAHA_API_KEY:-}
+      WAHA_SEND_ENABLED: ${WAHA_SEND_ENABLED:-true}
       OUTBOX_PACE_MIN_MS: ${OUTBOX_PACE_MIN_MS:-2000}
       OUTBOX_PACE_MAX_MS: ${OUTBOX_PACE_MAX_MS:-5000}
       GOTENBERG_URL: http://gotenberg:3000

@@ -31,3 +31,7 @@ registradas: agregar una ruta sin documentarla la hace fallar.
 
 Todas las rutas `/tools/*`: cuerpo de máximo 16 KB; con la conversación pausada responden `409 bot_paused` (menos `ficha`).
 
+Con `core.brands.bot_enabled = false`, el webhook sigue guardando mensajes y las rutas `/tools/*` responden `409 bot_disabled` con un token válido para esa marca. Al reactivar la marca, las rutas requieren un token nuevo. Los mensajes entrantes pendientes de entrega al bot y los envíos del bot que estaban en cola quedan descartados. Una solicitud a WAHA que ya salió puede completarse.
+
+Con `core.brands.bot_agenda_enabled = false`, `horarios_libres`, `reservar` y `confirmar` responden `409 agenda_disabled`. El calendario del personal sigue disponible.
+

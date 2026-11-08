@@ -424,14 +424,14 @@ describe("bot tools", () => {
          values ($1, 'waha', 'brand-two', 'javier', 'WAHA_HMAC_BYTOGAM_PRUEBAS', true) on conflict do nothing`,
         [brandTwo],
       );
-      const list = (version: number, rate: number, validFrom: string) =>
+      const list = (version: number, rate: number, discount: number, validFrom: string) =>
         owner.query(
           `insert into core.price_lists (brand_id, version, valid_from, is_confirmed, currency, covered_rate, uncovered_rate, discount_pct,
               min_total, home_base_sqft, home_bedroom_sqft, parking_first_car_sqft, parking_extra_car_sqft, sqm_to_sqft, pace_to_ft)
-           values ($4, $1, $3, true, 'USD', $2, $2, 0, 150, 1000, 140, 240, 200, 10.76, 2.5) on conflict do nothing`,
-          [version, rate, validFrom, brandTwo],
+           values ($1, $2, $3, true, 'USD', $4, $4, $5, 150, 1000, 140, 240, 200, 10.76, 2.5) on conflict do nothing`,
+          [brandTwo, version, validFrom, rate, discount],
         );
-      await list(1, 0.5, "2020-01-01T00:00:00Z");
+      await list(1, 0.5, 0, "2020-01-01T00:00:00Z");
 
       const phone = fakePhone();
       const body = delivery({ session: "brand-two", from: `${phone.digits}@c.us` });
@@ -444,14 +444,14 @@ describe("bot tools", () => {
       const token = await tokenFor(rows[0].id, rows[0].brand);
 
       const before = (await call(token, "POST", "cotizar", { tipo_cliente: "empresa", pies_cubiertos: 8000 })).json();
-      expect(before.total).toBe(4000);
+      expect(before).toMatchObject({ total: 4000, descuento: 0, descuento_pct: 0 });
 
       // The database decides what is in force with its own clock, not the one of the tests.
       const cut = new Date(Date.now() - 60_000).toISOString();
       await owner.query("update core.price_lists set valid_to = $1 where brand_id = $2 and version = 1", [cut, brandTwo]);
-      await list(2, 1, cut);
+      await list(2, 1, 10, cut);
       const after = (await call(token, "POST", "cotizar", { tipo_cliente: "empresa", pies_cubiertos: 8000 })).json();
-      expect(after.total).toBe(8000);
+      expect(after).toMatchObject({ total: 7200, descuento: 800, descuento_pct: 10 });
 
       const quotes = (await owner.query(
         `select q.version, q.status, q.total::float from core.quotes q
@@ -460,7 +460,7 @@ describe("bot tools", () => {
       )).rows;
       expect(quotes).toEqual([
         { version: 1, status: "superseded", total: 4000 },
-        { version: 2, status: "sent", total: 8000 },
+        { version: 2, status: "sent", total: 7200 },
       ]);
     });
   });

@@ -59,16 +59,22 @@ describe("what a template can print", () => {
     const view = buildView(data(), settings);
 
     expect(view).toMatchObject({
-      quote: { total_area: "1,860 ft²", discount: "-$15.62", discount_class: "", tax_label: "Impuesto (6.5%)", tax: "$13.49" },
+      quote: { total_area: "1,860 ft²", discount: "-$15.62", discount_class: "", tax_class: "", tax_label: "Impuesto (6.5%)", tax: "$13.49" },
     });
   });
 
   it("hides the discount row when the brand had the discount off, and when it took nothing off", () => {
-    expect(buildView(data({}, { discount_applied: false, discount: 0, tax_pct: 0, tax: 0 }), settings).quote).toMatchObject({ discount_class: "hidden", tax_label: "Impuesto (0%)", tax: "$0.00" });
+    expect(buildView(data({}, { discount_applied: false, discount: 0 }), settings).quote).toMatchObject({ discount_class: "hidden" });
     expect(buildView(data({}, { discount: 0 }), settings).quote).toMatchObject({ discount_class: "hidden" });
     // A quote issued before the switch existed has no flag: the discount it carries is shown.
     const { discount_applied: _flag, tax_pct: _pct, tax: _tax, ...old } = data().payload;
-    expect(buildView(data({ payload: old }), settings).quote).toMatchObject({ discount_class: "", tax: "$0.00" });
+    expect(buildView(data({ payload: old }), settings).quote).toMatchObject({ discount_class: "", tax_class: "hidden" });
+  });
+
+  it("hides the tax row in the rendered quote at a zero tax rate", () => {
+    const template = readFileSync(join(TEMPLATES, "quote.html"), "utf8");
+    const html = renderTemplate(template, buildView(data({}, { tax_pct: 0, tax: 0 }), settings));
+    expect(html).toContain('<tr class="hidden"><td>Impuesto (0%)</td>');
   });
 
   it("keeps the words Orlando asked to drop out of the quote", () => {

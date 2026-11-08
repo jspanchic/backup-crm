@@ -111,6 +111,7 @@ export const buildView = (data: RenderData, settings: Settings): View => {
       discount: discountShown ? money(-(number(p.discount) ?? 0), currency) : MISSING,
       // The templates have no conditions: this class hides the discount row when the brand has the discount off.
       discount_class: discountShown ? "" : "hidden",
+      tax_class: (number(p.tax_pct) ?? 0) > 0 ? "" : "hidden",
       tax_label: `Impuesto (${percent(p.tax_pct)})`,
       tax: money(p.tax ?? 0, currency),
       total: money(p.total, currency),

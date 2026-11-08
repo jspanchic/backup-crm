@@ -33,9 +33,12 @@ const BOT_TIMEOUT_MS = 10_000;
  * The bot gets a masked phone number, never the full one.
  */
 export const dispatchToBot = async (deps: BotDeps, messageId: number): Promise<"sent" | "failed" | "skipped"> => {
-  const { rows } = await deps.db.query<{ context: BotContext }>("select api.bot_context($1) as context", [messageId]);
-  const context = rows[0].context;
-  if (context.bot_paused) return "skipped";
+  const { rows: [{ context, generation }] } = await deps.db.query<{ context: BotContext | null; generation: number | null }>(
+    `select case when generation is not null then api.bot_context($1) end as context, generation
+     from (select api.bot_dispatch_generation($1) as generation) control`,
+    [messageId],
+  );
+  if (!context || generation === null || context.bot_paused) return "skipped";
 
   const url = botUrl(deps.env, context.bot);
   if (!url) {
@@ -47,7 +50,7 @@ export const dispatchToBot = async (deps: BotDeps, messageId: number): Promise<"
   const { brand_id, message_id, conversation_id, bot_paused: _paused, ...contract } = context;
   const token = await signConversationToken(
     deps.config.CONVERSATION_TOKEN_SECRET,
-    { brandId: brand_id, conversationId: conversation_id },
+    { brandId: brand_id, conversationId: conversation_id, botGeneration: generation },
     deps.now(),
   );
 

@@ -240,7 +240,11 @@ describe("panel proxy", () => {
     });
 
     it("does not exist without a development identity or in production", async () => {
-      for (const overrides of [{ ADMIN_DEV_SUB: undefined }, { NODE_ENV: "production" }]) {
+      for (const overrides of [
+        { ADMIN_DEV_SUB: undefined },
+        { NODE_ENV: "production" },
+        { NODE_ENV: "production", ADMIN_DEV_SUB: "" },
+      ]) {
         const bare = createTestApp(overrides);
         try {
           expect((await bare.app.inject({ method: "GET", url: "/admin/session" })).statusCode).toBe(404);

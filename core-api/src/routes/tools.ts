@@ -102,7 +102,15 @@ const pdfNotice = (outcome: DocumentOutcome, what: string) => ({
       : `No se envió ningún PDF de ${what}. No lo menciones ni lo prometas.`,
 });
 
-type ToolContext ={ conversationId: number; paused: boolean };
+type ToolContext = { conversationId: number; paused: boolean; agendaEnabled: boolean };
+type ToolConversation = {
+  conversation_id: number;
+  bot_paused: boolean;
+  closed: boolean;
+  bot_enabled: boolean;
+  bot_agenda_enabled: boolean;
+  bot_generation: number;
+};
 
 const phoneForCustomer = (e164: string): string => parsePhoneNumberFromString(e164)?.formatNational() ?? e164;
 
@@ -118,7 +126,7 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
       await reply.code(401).send({ error: "invalid_token" });
       return null;
     }
-    const { rows } = await deps.db.query<{ result: { conversation_id: number; bot_paused: boolean; closed: boolean } | null }>(
+    const { rows } = await deps.db.query<{ result: ToolConversation | null }>(
       "select api.tool_conversation($1, $2) as result",
       [verified.claims.conversationId, verified.claims.brandId],
     );
@@ -127,11 +135,19 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
       await reply.code(401).send({ error: "invalid_token" });
       return null;
     }
+    if (!found.bot_enabled) {
+      await reply.code(409).send({ error: "bot_disabled" });
+      return null;
+    }
+    if (found.bot_generation !== (verified.claims.botGeneration ?? 0)) {
+      await reply.code(401).send({ error: "invalid_token" });
+      return null;
+    }
     if (found.closed) {
       await reply.code(409).send({ error: "conversation_closed" });
       return null;
     }
-    return { conversationId: found.conversation_id, paused: found.bot_paused };
+    return { conversationId: found.conversation_id, paused: found.bot_paused, agendaEnabled: found.bot_agenda_enabled };
   };
 
   const readBody = (request: FastifyRequest): unknown => {
@@ -157,6 +173,7 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
       if (code === "CX003") return reply.code(409).send({ error: "hold_expired" });
       if (code === "CX005") return reply.code(409).send({ error: "slot_taken", message: "Ese horario ya no está disponible. Consulta horarios_libres otra vez y ofrece otro." });
       if (code === "CX006") return reply.code(409).send({ error: "slot_not_offered", message: "Solo puedes reservar un horario que salió de horarios_libres en esta conversación." });
+      if (code === "CX007") return reply.code(409).send({ error: "bot_disabled" });
       throw error;
     }
   };
@@ -164,7 +181,7 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
   const tool = <T>(
     method: "GET" | "POST",
     url: string,
-    options: { schema?: z.ZodType<T>; pausable?: boolean },
+    options: { schema?: z.ZodType<T>; pausable?: boolean; agenda?: boolean },
     handler: (context: ToolContext, input: T, reply: FastifyReply, request: FastifyRequest) => Promise<unknown>,
   ) =>
     app.route({
@@ -176,6 +193,7 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
         if (!context) return reply;
         // Pause applies to everything the bot does except reading its own card.
         if (options.pausable !== false && context.paused) return reply.code(409).send({ error: "bot_paused" });
+        if (options.agenda && !context.agendaEnabled) return reply.code(409).send({ error: "agenda_disabled" });
 
         let input = undefined as T;
         if (options.schema) {
@@ -242,7 +260,7 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
 
   const languageOf = (facts: { language: string | null }): Language => (facts.language === "en" ? "en" : "es");
 
-  tool("POST", "/tools/horarios_libres", { schema: freeSlotsSchema }, async ({ conversationId }, input) => {
+  tool("POST", "/tools/horarios_libres", { schema: freeSlotsSchema, agenda: true }, async ({ conversationId }, input) => {
     const { rows } = await deps.db.query<{ result: { zona_horaria: string; horarios: { inicio: string; fin: string }[] } }>(
       "select api.free_slots($1, $2::date, $3::int) as result",
       [conversationId, input.desde ?? null, input.dias ?? null],
@@ -256,7 +274,7 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
     };
   });
 
-  tool("POST", "/tools/reservar", { schema: reserveSchema }, async ({ conversationId }, input) => {
+  tool("POST", "/tools/reservar", { schema: reserveSchema, agenda: true }, async ({ conversationId }, input) => {
     const { rows } = await deps.db.query<{ result: { inicio: string; fin: string; vence_en: string } }>(
       "select api.hold_slot($1, $2::timestamptz) as result",
       [conversationId, input.inicio],
@@ -264,7 +282,7 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
     return { ...rows[0].result, aviso: "Es una reserva provisional: se confirma con confirmar cuando el cliente acepte la orden de compra." };
   });
 
-  tool("POST", "/tools/confirmar", { schema: confirmSchema }, async ({ conversationId }, _input, reply) => {
+  tool("POST", "/tools/confirmar", { schema: confirmSchema, agenda: true }, async ({ conversationId }, _input, reply) => {
     const { rows } = await deps.db.query<{ facts: ReplyFacts & { language: string | null } }>("select api.reply_facts($1) as facts", [conversationId]);
     const facts = rows[0].facts;
     const hold = facts.appointment;

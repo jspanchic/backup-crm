@@ -23,6 +23,13 @@ describe("conversation token", () => {
     expect(await verifyConversationToken(secret, token, at(10))).toEqual({ ok: true, claims });
   });
 
+  it("carries the bot generation when issued for a live brand", async () => {
+    const generatedClaims = { ...claims, botGeneration: 2 };
+    const token = await signConversationToken(secret, generatedClaims, at(0));
+    expect(await verifyConversationToken(secret, token, at(10))).toEqual({ ok: true, claims: generatedClaims });
+    expect(await verifyConversationToken(secret, await make({ brd: 1, cnv: 42, gen: "2" }), at(10))).toEqual({ ok: false });
+  });
+
   it("lives for 15 minutes", async () => {
     expect(TOKEN_TTL_SECONDS).toBe(900);
     const token = await signConversationToken(secret, claims, at(0));
