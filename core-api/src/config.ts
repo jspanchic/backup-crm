@@ -20,8 +20,6 @@ const schema = z.object({
   WAHA_BASE_URL: z.url().default("http://127.0.0.1:3100"),
   WAHA_API_KEY: z.string().optional(),
   WAHA_SEND_ENABLED: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
-  OUTBOX_PACE_MIN_MS: z.coerce.number().int().min(0).default(2000),
-  OUTBOX_PACE_MAX_MS: z.coerce.number().int().min(0).default(5000),
 
   // Gotenberg turns the HTML templates into PDFs. It is a separate container on the internal network.
   GOTENBERG_URL: z.url().default(`http://127.0.0.1:${process.env.GOTENBERG_PORT ?? 13302}`),

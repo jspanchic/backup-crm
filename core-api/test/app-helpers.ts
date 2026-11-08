@@ -23,9 +23,12 @@ export type TestApp = {
   env: NodeJS.ProcessEnv;
   botCalls: Call[];
   wahaCalls: Call[];
+  presenceCalls: Call[];
+  inboundSteps: (string | number)[];
   /** Replace what the fake bot answers: a status, "down" or a function that can wait. */
   botAnswers: { next: (call: Call) => Promise<{ ok: boolean; status: number }> };
   wahaAnswers: { next: (call: Call) => Promise<{ ok: boolean; status: number }> };
+  presenceAnswers: { next: (call: Call) => Promise<{ ok: boolean; status: number }> };
   /** Stands in for Gotenberg: replace `next` to make the engine fail. `html` keeps what it was asked to render. */
   pdfEngine: { next: (html: string) => Promise<Buffer>; html: string[] };
   clock: { now: Date };
@@ -37,8 +40,6 @@ const testEnv = (overrides: Record<string, string | undefined>): NodeJS.ProcessE
   NODE_ENV: "test",
   PGDATABASE: TEST_DB,
   POSTGREST_URL: POSTGREST_TEST_URL,
-  OUTBOX_PACE_MIN_MS: "0",
-  OUTBOX_PACE_MAX_MS: "0",
   ADMIN_DEV_SUB: randomUUID(),
   BOT_URL_JAVIER: "http://bot.test/webhook/javier",
   WAHA_BASE_URL: "http://waha.test",
@@ -52,25 +53,32 @@ export const createTestApp = (overrides: Record<string, string | undefined> = {}
   const clock = { now: new Date(NOW) };
   const botCalls: Call[] = [];
   const wahaCalls: Call[] = [];
+  const presenceCalls: Call[] = [];
+  const inboundSteps: (string | number)[] = [];
   const botAnswers = { next: async (_call: Call) => ({ ok: true, status: 200 }) };
   const wahaAnswers = { next: async (_call: Call) => ({ ok: true, status: 201 }) };
+  const presenceAnswers = { next: async (_call: Call) => ({ ok: true, status: 201 }) };
   const pdfEngine = { next: async (html: string) => Buffer.from(`%PDF-1.4 fake ${html}`), html: [] as string[] };
 
-  const record = (calls: Call[], answers: typeof botAnswers): FetchLike => async (url, init) => {
+  const record = (calls: Call[], answers: typeof botAnswers, note?: (url: string) => void): FetchLike => async (url, init) => {
     const call = { url, headers: init.headers, body: init.body };
+    note?.(url);
     calls.push(call);
     return answers.next(call);
   };
 
   const proxyFetch: ProxyFetch = (url, init) => fetch(url, init);
-  const botFetch = record(botCalls, botAnswers);
+  const botFetch = record(botCalls, botAnswers, () => inboundSteps.push("bot"));
   const wahaFetch = record(wahaCalls, wahaAnswers);
+  const presenceFetch = record(presenceCalls, presenceAnswers, (url) => inboundSteps.push(new URL(url).pathname));
+  const presenceSleep = async (ms: number) => void inboundSteps.push(ms);
   const app = buildApp({
     config,
     env,
     db,
     fetch: botFetch,
-    outboxFetch: wahaFetch,
+    wahaFetch: presenceFetch,
+    presenceSleep,
     proxyFetch,
     renderPdf: async (html) => {
       pdfEngine.html.push(html);
@@ -80,14 +88,13 @@ export const createTestApp = (overrides: Record<string, string | undefined> = {}
   });
 
   const sleeps: number[] = [];
-  const botDeps: BotDeps = { config, env, db, fetch: botFetch, log: app.log, now: () => clock.now };
+  const botDeps: BotDeps = { config, env, db, fetch: botFetch, wahaFetch: presenceFetch, presenceSleep, log: app.log, now: () => clock.now };
   const outboxDeps: OutboxDeps = {
     config,
     db,
     fetch: wahaFetch,
     log: app.log,
     sleep: async (ms) => void sleeps.push(ms),
-    random: () => 0.5,
   };
 
   return {
@@ -100,8 +107,11 @@ export const createTestApp = (overrides: Record<string, string | undefined> = {}
     env,
     botCalls,
     wahaCalls,
+    presenceCalls,
+    inboundSteps,
     botAnswers,
     wahaAnswers,
+    presenceAnswers,
     pdfEngine,
     clock,
     close: async () => {

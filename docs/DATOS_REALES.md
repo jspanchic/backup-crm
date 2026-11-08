@@ -10,6 +10,7 @@ Hoy el CRM de la presentación corre con **datos de ejemplo**: nada de esto es r
 | Descuento | Activo (7 % de la lista de precios) | `core.brands.discount_enabled` (SQL) | Cotizaciones **nuevas** |
 | Precios y porcentaje del descuento | Lista de ejemplo, «por confirmar» | Una **nueva versión** de `core.price_lists` | Cotizaciones nuevas |
 | Textos legales y datos de la empresa | `[POR CONFIRMAR]` | `core-api/templates/settings.json` | Todos los PDF (ver `docs/PLANTILLAS_PDF.md`) |
+| Envío de PDF a clientes reales | Apagado | `core.brands.pdf_clientes_reales` (SQL) | Envíos por WhatsApp desde el bot y el panel |
 
 ## 1. Aplicadores, días libres, servicio y traslado
 
@@ -64,7 +65,7 @@ En el VPS de pruebas: `docker compose exec -T db psql -U postgres -d salvionix -
 ## 3. Lo demás que sigue siendo de ejemplo
 
 - **Lista de precios:** la presentación usa una lista de ejemplo marcada «por confirmar». Para la lista de producción, usa el importador de la sección siguiente.
-- **Textos legales y datos de la empresa:** `core-api/templates/settings.json`. Mientras digan `[POR CONFIRMAR]`, a los clientes reales no se les emite ni se les envía ningún PDF (`confirmed: false`).
+- **Textos legales y datos de la empresa:** `core-api/templates/settings.json`. Con `confirmed: false`, el bot no emite documentos para clientes reales y el panel no permite enviarlos por WhatsApp.
 - **Responsable de las cuentas, canal de WhatsApp y marca:** los crea la semilla de ejemplo (`db/seeds/sample/`); la cuenta real se crea en el panel.
 - **Numeración de documentos:** la serie real (`COT`, `OC`, `OT`) empieza donde se indique en `core.document_counters`; la de prueba (`PRUEBA-*`) se reinicia con cada `limpio`.
 
@@ -93,3 +94,18 @@ Sigue el comando de [CORTE_LUNES.md](CORTE_LUNES.md). El importador activa la li
 | 1.000 | 0 | $120 | $8 | $150 | Sí |
 
 Repetir el archivo activo con las mismas reglas devuelve `already active`. Las cotizaciones emitidas conservan su lista y sus importes.
+
+## 5. Envío de PDF a clientes reales
+
+`core.brands.pdf_clientes_reales` queda en `false` por defecto. Para enviar PDF por WhatsApp a clientes reales se requiere activarlo en la marca y confirmar los textos legales en `core-api/templates/settings.json`. El interruptor afecta tanto al bot como al panel. La emisión manual, la descarga de PDF y los envíos a clientes marcados de prueba siguen disponibles.
+
+Consulta el estado y, cuando corresponda habilitarlo, ejecuta el `UPDATE` con la función `sql` del [procedimiento de corte](CORTE_LUNES.md).
+
+```sql
+SELECT slug, pdf_clientes_reales FROM core.brands WHERE slug = 'salvionix';
+
+UPDATE core.brands SET pdf_clientes_reales = true
+WHERE slug = 'salvionix' RETURNING slug, pdf_clientes_reales;
+```
+
+Para apagarlo usa `false` en el `UPDATE`. Al apagarlo, se cancelan los PDF para clientes reales que todavía esperan envío. Los envíos cancelados se pueden volver a solicitar manualmente después de habilitarlo. Si ya se había autorizado una llamada a WAHA, puede completar ese intento. Con el interruptor apagado y los textos legales confirmados, el bot puede seguir preparando las órdenes de trabajo internas.

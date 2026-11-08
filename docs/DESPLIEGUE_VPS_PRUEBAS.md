@@ -24,7 +24,8 @@ Cada contenedor lleva además límite de CPU y registros `json-file` rotados (3 
 
 1. **Nada queda publicado a internet.** El único puerto publicado es el del panel, y solo en `127.0.0.1` del VPS: se ve con un túnel SSH (sección f). La red `back` es `internal` (sin salida a internet); `edge` existe solo para poder publicar el puerto del panel.
 2. **`core-api` corre con `NODE_ENV=development` y una identidad de desarrollo (`ADMIN_DEV_SUB`).** El proxy `/admin/*` que usa el panel solo se monta fuera de producción (en producción lo reemplazará Cloudflare Access, CRM-T3, que aún no existe), y no pide autenticación. Por eso **`core-api` no está en la red de n8n**: lo único que toca esa red es el `gateway`, un nginx mínimo que deja pasar a n8n solo `/tools/*`, `/healthz` y `POST /hooks/whatsapp`. `/admin/*` y todo lo demás responde `403` desde la red de n8n y solo se usa desde el panel, que llega por `127.0.0.1` del VPS (túnel SSH). Es la opción estricta y es la que trae el paquete.
-3. **Cómo habla `core-api` con n8n y WAHA:** como no está en la red de n8n, sale por el mismo `gateway`: `:8081` reenvía solo `POST /webhook/*` a n8n (por eso `BOT_URL_JAVIER` apunta a `http://gateway:8081/...`) y `:8082` solo `POST /api/sendText` y `/api/sendFile` a WAHA. Esos dos puertos también se ven desde la red de n8n, pero solo reenvían a n8n y WAHA, que ya están en ella. El `gateway` necesita saber dónde están: `N8N_UPSTREAM` (nombre del contenedor de n8n y su puerto) y, para la prueba con WAHA, `WAHA_UPSTREAM`.4. **WhatsApp:** por defecto `WAHA_BASE_URL` apunta a un nombre que no existe (`waha.invalid`), así que los envíos del outbox fallan sin tocar WhatsApp real. Para una prueba controlada, ver la sección d.7. No se cambian los webhooks de WAHA.
+3. **Cómo habla `core-api` con n8n y WAHA.** El `gateway` reenvía `POST /webhook/*` a n8n en `:8081`. En `:8082` solo permite los POST exactos a `/api/sendSeen`, `/api/startTyping`, `/api/sendText`, `/api/sendFile` y `/api/stopTyping`. El proxy de WAHA hace un solo intento por petición. Configura `N8N_UPSTREAM` y, para el ensayo con el chip de BYTOGAM, `WAHA_UPSTREAM`.
+4. **WhatsApp.** Para el ensayo con mensajes ficticios, usa `WAHA_SEND_ENABLED=false`. `WAHA_BASE_URL` apunta por defecto a `waha.invalid`. El ensayo real opcional usa la sesión de BYTOGAM según d.7.
 5. **Gotenberg (PDF)** pesa 2,5 GB en disco y puede usar 1 GB de RAM. Sin él, `cotizar` y `confirmar` devuelven `pdf: no_disponible` y no se pierde nada. Decide en la sección a si se activa.
 
 ## a) Verificaciones previas (en el VPS, solo lectura)
@@ -130,7 +131,7 @@ sed -i "s|^N8N_UPSTREAM=.*|N8N_UPSTREAM=NOMBRE_DEL_CONTENEDOR_N8N:5678|" .env
 awk -F= '/^[A-Z0-9_]+=/ {print $1, ($2=="" ? "vacío" : "con valor")}' .env
 ```
 
-Deben quedar **con valor**: `N8N_DOCKER_NETWORK`, `N8N_UPSTREAM`, las cuatro contraseñas, los tres secretos de firma y `WAHA_HMAC_BYTOGAM_PRUEBAS`. Pueden quedar **vacías**: `BOT_URL_JAVIER` (se rellena en la sección d), `WAHA_BASE_URL`, `WAHA_UPSTREAM`, `WAHA_API_KEY`, `OUTBOX_*`, `PANEL_PORT`, `ADMIN_DEV_SUB`, `ADMIN_ALLOWED_ORIGINS`, `LOG_LEVEL`, `PANEL_PRESENTATION_MODE` (usan su valor por defecto). **No pegues el contenido del `.env` en ningún chat, correo ni archivo.**
+Deben quedar **con valor**: `N8N_DOCKER_NETWORK`, `N8N_UPSTREAM`, las cuatro contraseñas, los tres secretos de firma y `WAHA_HMAC_BYTOGAM_PRUEBAS`. Pueden quedar **vacías**: `BOT_URL_JAVIER` (se rellena en la sección d), `WAHA_BASE_URL`, `WAHA_UPSTREAM`, `WAHA_API_KEY`, `PANEL_PORT`, `ADMIN_DEV_SUB`, `ADMIN_ALLOWED_ORIGINS`, `LOG_LEVEL`, `PANEL_PRESENTATION_MODE` (usan su valor por defecto). El ritmo de WAHA se configura por canal en la base, según d.8. **No pegues el contenido del `.env` en ningún chat, correo ni archivo.**
 
 Para activar el PDF, añade al final del `.env`: `COMPOSE_PROFILES=pdf` (y haz antes `docker pull gotenberg/gotenberg:8.38.1`, que son 2,5 GB).
 
@@ -141,16 +142,15 @@ Todo desde `~/salvionix-crm` (ahí está el `.env`, que Compose lee solo). Cada 
 ```bash
 cd ~/salvionix-crm
 
-# 1. Validar el archivo. Si falta una variable, dice cuál (nunca su valor).
-docker compose config -q && echo "compose OK"
-
-# 2. Levantar. --no-build: usa las imágenes cargadas en la sección b (si faltaran, falla en vez de descargar nada).
-docker compose up -d --no-build
+# 1. Validar y detener el worker anterior antes de migrar.
+docker compose config -q && docker compose stop core-api &&
+  WAHA_SEND_ENABLED=false docker compose up -d --no-build --wait --wait-timeout 120 &&
+  docker compose up -d --no-build --no-deps --force-recreate --wait gateway
 
 # 3. Estado. Esperado: db, core-api y gateway "healthy"; migrate "Exited (0)"; postgrest y panel "Up".
 docker compose ps -a
 
-# 4. Las migraciones (bootstrap de roles + 17 archivos). La última línea de la lista debe ser 0017_documents_in_flows.sql.
+# 4. Las migraciones. La nueva instalación aplica 0022_waha_outbox_pacing.sql.
 docker compose logs migrate | tail -25
 ```
 
@@ -226,7 +226,7 @@ docker exec NOMBRE_DEL_CONTENEDOR_N8N wget -qO- http://salvionix-core-api:8080/a
 | `core-api` → n8n | `X-Core-Signature` | HMAC-SHA256 hexadecimal de `timestamp + "." + cuerpo crudo`, con `BOT_HMAC_SECRET` |
 | n8n → `core-api` (herramientas) | `Authorization` | `Bearer <token>`: el campo `token` del cuerpo del webhook de entrada (vale 15 minutos). **n8n no lo genera ni lo modifica** |
 | n8n → `core-api` (herramientas) | `Content-Type` | `application/json` (en los POST; cuerpo de máximo 16 KB y esquema estricto) |
-| WAHA → `core-api` (solo si se conectara) | `X-Webhook-Hmac`, `X-Webhook-Hmac-Algorithm`, `X-Webhook-Timestamp` | Firma HMAC-SHA512 del cuerpo con `WAHA_HMAC_BYTOGAM_PRUEBAS`. **El lunes no se toca ningún webhook de WAHA** |
+| WAHA → `core-api` en el ensayo real | `X-Webhook-Hmac`, `X-Webhook-Hmac-Algorithm`, `X-Webhook-Timestamp` | Firma HMAC-SHA512 del cuerpo con `WAHA_HMAC_BYTOGAM_PRUEBAS`. El ensayo usa solo la sesión de BYTOGAM |
 
 **Variables en n8n** (las que usa la copia de Javier)
 
@@ -289,11 +289,12 @@ docker compose up -d --no-build core-api
 
 ```bash
 cd ~/salvionix-crm
+WAHA_SEND_ENABLED=false docker compose up -d --no-build core-api
 docker compose exec -T core-api node --input-type=module - 14075550150 "Hola, quiero información para desinfectar mi restaurante" < send-test-message.mjs
 # core-api answered 200
 ```
 
-`core-api` guarda el mensaje, crea el contacto («WhatsApp ••0150», marcado como prueba) y llama a la copia de Javier. Su respuesta entra por `/tools/responder` y se ve en la ficha del contacto en el panel. El envío real al cliente falla a propósito (no hay WAHA): es lo esperado.
+`core-api` guarda el mensaje, crea el contacto («WhatsApp ••0150», marcado como prueba) y llama a la copia de Javier. Su respuesta entra por `/tools/responder`, se ve en la ficha del contacto y queda pendiente en el outbox con el envío apagado.
 
 ### d.7 Una prueba controlada con WAHA real (solo si se acuerda)
 
@@ -301,9 +302,55 @@ Solo con **un chip propio de Sebastián**, **un** mensaje, y con Joel enterado. 
 
 1. WAHA debe estar en la red de n8n (comando 9 de la sección a). Anota su nombre de contenedor y puerto.
 2. La sesión de WAHA debe llamarse igual que el canal de pruebas: `bytogam-pruebas`. Si no, el nombre del canal se ajusta en la base de este stack (no en WAHA); se decide ese día.
-3. En el `.env`: `WAHA_UPSTREAM=NOMBRE_DEL_CONTENEDOR_WAHA:PUERTO` y `WAHA_BASE_URL=http://gateway:8082` (y `WAHA_API_KEY` solo si WAHA la pide). `core-api` habla con WAHA **a través del gateway**, que solo deja pasar `POST /api/sendText` y `/api/sendFile`. Recrea `gateway` y `core-api`: `docker compose up -d --no-build gateway core-api`.
-4. **No se cambia ningún webhook de WAHA**: la entrada de ese mensaje se simula con la sección d.6, con el número del chip propio en lugar del ficticio. Lo único real es el envío de la respuesta.
-5. Al terminar, deja `WAHA_BASE_URL=` y `WAHA_UPSTREAM=` vacíos de nuevo y recrea `gateway` y `core-api`.
+3. Limpia los datos ficticios en el proyecto aislado según g, con el envío aún apagado. Verifica que el conteo de `pending` y `sending` sea cero antes de activar el envío.
+4. En la configuración privada de **pruebas**, establece `WAHA_UPSTREAM` con el contenedor y puerto interno de WAHA, `WAHA_BASE_URL=http://gateway:8082` y `WAHA_API_KEY` si WAHA la pide. Arranca el gateway y `core-api` con el siguiente comando. La copia de Javier usa `/tools/responder` para encolar la respuesta y avisa al equipo. `core-api` controla el visto, la escritura y el ritmo de salida.
+
+   ```bash
+   cd ~/salvionix-crm
+   unset WAHA_BASE_URL WAHA_UPSTREAM
+   WAHA_SEND_ENABLED=true docker compose up -d --no-build --wait core-api gateway
+   ```
+
+5. Usa la sesión de BYTOGAM y un mensaje entrante real para comprobar que el acuse corresponde a ese mensaje. Observa el visto y el indicador de escritura antes de la ejecución de Javier en n8n. Después de `responder`, debe llegar una sola respuesta y cesar el indicador. Sigue el cambio temporal y la restauración del webhook de BYTOGAM. [Ensayo de BYTOGAM](CORTE_LUNES.md#b-probar-en-la-pila-aislada).
+6. Al terminar, apaga primero el envío con `WAHA_SEND_ENABLED=false docker compose up -d --no-build core-api`. Restaura el webhook de BYTOGAM y devuelve `WAHA_BASE_URL` y `WAHA_UPSTREAM` al estado de ensayo sin WhatsApp real.
+
+### d.8 Ritmo de WAHA por canal
+
+Al aceptar un mensaje entrante, `core-api` espera 2 segundos, llama a `sendSeen`, espera otros 2 segundos, llama a `startTyping` y despacha el mensaje a la copia de Javier. Si falla el visto o la escritura, registra el fallo y continúa hacia n8n. Javier usa `/tools/responder` para encolar. `core-api` conserva la sesión y el identificador del chat para las llamadas a WAHA. Un audio, una imagen u otro archivo sin texto llega al bot como `[El cliente envió un audio o archivo sin texto]`.
+
+Cuando el outbox toma la respuesta, espera 2 segundos, llama a `sendText` y cierra el indicador con `stopTyping`. Los archivos que se habiliten usan `sendFile` y cuentan en el mismo límite. Las entregas a un mismo chat se procesan en orden. El límite se comparte entre los workers de esta pila y se aplica en cada ventana de un minuto. El menor tope de los canales WAHA activos define el máximo global. Con 6 envíos por minuto, deja al menos 10 segundos entre reservas.
+
+| Campo de `core.channels` | Valor inicial | Qué ajusta |
+|---|---:|---|
+| `waha_before_seen_ms` | 2000 | Espera antes de `sendSeen` |
+| `waha_before_typing_ms` | 2000 | Espera entre `sendSeen` y `startTyping` |
+| `waha_before_send_ms` | 2000 | Espera al procesar la salida, antes de `sendText` o `sendFile` |
+| `waha_messages_per_minute` | 6 | Tope que el canal aporta al límite global, de 1 a 60 por minuto |
+
+Consulta los valores con este comando desde `~/salvionix-crm`.
+
+```bash
+docker compose exec -T db psql -X -U core_owner -d salvionix -v ON_ERROR_STOP=1 <<'SQL'
+SELECT identifier, waha_before_seen_ms, waha_before_typing_ms, waha_before_send_ms,
+       waha_messages_per_minute
+FROM core.channels WHERE provider = 'waha' AND identifier = 'bytogam-pruebas';
+SQL
+```
+
+Para ajustar los valores, sustituye los números del `UPDATE` y ejecútalo en la base que corresponda. Para producción, usa `identifier = 'salvionix'` con la función `sql` del [procedimiento de corte](CORTE_LUNES.md#a-desplegar-con-el-envío-apagado).
+
+```sql
+UPDATE core.channels
+SET waha_before_seen_ms = 2000,
+    waha_before_typing_ms = 2000,
+    waha_before_send_ms = 2000,
+    waha_messages_per_minute = 6
+WHERE provider = 'waha' AND identifier = 'bytogam-pruebas';
+```
+
+El Swagger generado por `devlikeapro/waha:gows-2026.9.2` define `sendSeen` con `session`, `chatId` y `messageIds`. `core-api` pone en `messageIds` el identificador del mensaje entrante. `startTyping` y `stopTyping` usan `session` y `chatId`. Verifica el visto durante el ensayo con la sesión de BYTOGAM. [API de mensajes de WAHA](https://waha.devlike.pro/docs/how-to/send-messages/#send-seen), [contrato de WAHA 2026.9.2](https://github.com/devlikeapro/waha/blob/2026.9.2/src/structures/chatting.dto.ts#L81-L107).
+
+El outbox espera 30 segundos antes del segundo intento y 120 antes del tercero cuando el fallo permite reintentar con seguridad, como una conexión rechazada antes del POST o un `429` de WAHA. Un fallo de `stopTyping` posterior a una entrega confirmada solo se registra. Si la entrega es incierta, por ejemplo tras un timeout o `5xx` durante el envío, el chat queda detenido para conciliación y los demás chats pueden continuar. Al migrar, la cola anterior conserva para revisión los envíos en curso y los pendientes que ya se habían intentado. [Conciliar una entrega](CORTE_LUNES.md#conciliar-una-entrega-incierta).
 
 ## e) Comprobar que n8n, WAHA y Javier v4 siguen igual (foto antes y después)
 

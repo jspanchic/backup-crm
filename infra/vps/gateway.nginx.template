@@ -4,7 +4,7 @@
 # :8080  what n8n may call (salvionix-core-api:8080 on the network of n8n): /tools/*, the health check and the WhatsApp webhook.
 #        /admin/*, the REST proxy and everything else answer 403: they are reachable only from the panel, through the VPS loopback.
 # :8081  core-api -> the bot: only POST /webhook/* of n8n.
-# :8082  core-api -> WAHA: only POST /api/sendText and /api/sendFile (empty WAHA_UPSTREAM = points at nothing).
+# :8082  core-api -> WAHA: only POST sendSeen, startTyping, sendText, sendFile and stopTyping under /api/.
 # Ports 8081 and 8082 are also visible from the network of n8n, but they only forward to n8n and WAHA, which are on it anyway.
 resolver 127.0.0.11 valid=10s ipv6=off;
 server_tokens off;
@@ -61,7 +61,18 @@ server {
     proxy_http_version 1.1;
     proxy_connect_timeout 5s;
     proxy_read_timeout 30s;
+    proxy_next_upstream off;
 
+    location = /api/sendSeen {
+        limit_except POST { deny all; }
+        client_max_body_size 32k;
+        proxy_pass $waha;
+    }
+    location = /api/startTyping {
+        limit_except POST { deny all; }
+        client_max_body_size 32k;
+        proxy_pass $waha;
+    }
     location = /api/sendText {
         limit_except POST { deny all; }
         client_max_body_size 1m;
@@ -70,6 +81,11 @@ server {
     location = /api/sendFile {
         limit_except POST { deny all; }
         client_max_body_size 20m;
+        proxy_pass $waha;
+    }
+    location = /api/stopTyping {
+        limit_except POST { deny all; }
+        client_max_body_size 32k;
         proxy_pass $waha;
     }
     location / {

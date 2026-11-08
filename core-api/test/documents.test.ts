@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type pg from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createTestApp, type TestApp } from "./app-helpers.ts";
-import { createLead, createQuote, createTechnician, insertHold, ownerClient, setStatus, waitForPostgrest, type Lead } from "./helpers.ts";
+import { clearOutboxForTest, createLead, createQuote, createTechnician, insertHold, ownerClient, setStatus, waitForPostgrest, type Lead } from "./helpers.ts";
 import { PdfEngineError } from "../src/documents/gotenberg.ts";
 import { runOutboxOnce } from "../src/outbox.ts";
 
@@ -245,7 +245,21 @@ describe("documents as PDFs", () => {
 
   describe("sending", () => {
     // The outbox is shared by every test file: rows left by others would be claimed here, so start from an empty queue.
-    beforeEach(() => owner.query("update core.outbox set status = 'failed', last_error = 'cleared by a test' where status in ('pending', 'sending')"));
+    beforeEach(() => clearOutboxForTest(owner));
+
+    const withConfirmedLegal = async (check: () => Promise<void>) => {
+      const settingsFile = join(templatesDir, "settings.json");
+      const original = readFileSync(settingsFile, "utf8");
+      writeFileSync(settingsFile, original.replace('"confirmed": false', '"confirmed": true'));
+      try {
+        await check();
+      } finally {
+        writeFileSync(settingsFile, original);
+      }
+    };
+
+    const enableRealPdf = (enabled: boolean) =>
+      owner.query("update core.brands set pdf_clientes_reales = $1 where slug = 'salvionix'", [enabled]);
 
     it("queues the PDF for the customer's conversation and sends it as a WhatsApp file", async () => {
       const lead = await quotedLead({ isTest: true });
@@ -257,9 +271,9 @@ describe("documents as PDFs", () => {
       await runOutboxOnce(test.outboxDeps);
 
       expect(queued.statusCode).toBe(202);
-      expect(test.wahaCalls).toHaveLength(1);
-      expect(test.wahaCalls[0].url).toBe("http://waha.test/api/sendFile");
-      const sent = JSON.parse(test.wahaCalls[0].body);
+      const files = test.wahaCalls.filter((call) => call.url.endsWith("/api/sendFile"));
+      expect(files).toHaveLength(1);
+      const sent = JSON.parse(files[0].body);
       expect(sent.caption).toBe(`Le enviamos su cotización ${body.display_number}.`);
       expect(sent.file).toMatchObject({ mimetype: "application/pdf", filename: `${body.display_number}.pdf` });
       expect(sha256(Buffer.from(sent.file.data, "base64"))).toBe(body.file.sha256);
@@ -279,21 +293,58 @@ describe("documents as PDFs", () => {
       expect((await owner.query("select count(*)::int as n from core.outbox where conversation_id = $1", [conversationId])).rows[0].n).toBe(0);
     });
 
-    it("sends to a real customer once settings.json says the legal texts are confirmed", async () => {
+    it("refuses a real delivery by default even with confirmed legal texts", async () => {
+      const lead = await quotedLead();
+      const conversationId = await openConversation(lead, false);
+      const body = (await issue({ deal_id: lead.dealId, document_type: "quote" })).json();
+      expect((await download(body.id)).statusCode).toBe(200);
+
+      await withConfirmedLegal(async () => {
+        const response = await send(body.id);
+        expect(response.statusCode).toBe(409);
+        expect(response.json()).toEqual({ error: "invalid_state", reason: "pdf_real_disabled" });
+      });
+      expect((await owner.query("select count(*)::int as n from core.outbox where conversation_id = $1", [conversationId])).rows[0].n).toBe(0);
+      expect((await owner.query("select count(*)::int as n from core.messages where conversation_id = $1", [conversationId])).rows[0].n).toBe(0);
+    });
+
+    it("sends to a real customer when both the brand and legal settings allow it", async () => {
       const lead = await quotedLead();
       await openConversation(lead, false);
       const body = (await issue({ deal_id: lead.dealId, document_type: "quote" })).json();
-      const settingsFile = join(templatesDir, "settings.json");
-      const original = readFileSync(settingsFile, "utf8");
-      writeFileSync(settingsFile, original.replace('"confirmed": false', '"confirmed": true'));
       test.wahaCalls.length = 0;
+      await enableRealPdf(true);
       try {
-        expect((await send(body.id)).statusCode).toBe(202);
+        await withConfirmedLegal(async () => {
+          expect((await send(body.id)).statusCode).toBe(202);
+        });
+        await runOutboxOnce(test.outboxDeps);
+        expect(test.wahaCalls.filter((call) => call.url.endsWith("/api/sendFile"))).toHaveLength(1);
       } finally {
-        writeFileSync(settingsFile, original);
+        await enableRealPdf(false);
       }
-      await runOutboxOnce(test.outboxDeps);
-      expect(test.wahaCalls.map((call) => call.url)).toEqual(["http://waha.test/api/sendFile"]);
+    });
+
+    it("cancels a queued real PDF when disabled and does not send it after re-enabling", async () => {
+      const lead = await quotedLead();
+      await openConversation(lead, false);
+      const body = (await issue({ deal_id: lead.dealId, document_type: "quote" })).json();
+      test.wahaCalls.length = 0;
+      await enableRealPdf(true);
+      try {
+        await withConfirmedLegal(async () => {
+          const queued = await send(body.id);
+          expect(queued.statusCode).toBe(202);
+          await enableRealPdf(false);
+          await enableRealPdf(true);
+          await runOutboxOnce(test.outboxDeps);
+          expect(test.wahaCalls.filter((call) => call.url.endsWith("/api/sendFile"))).toHaveLength(0);
+          const state = await owner.query("select status, last_error from core.outbox where id = $1", [queued.json().outbox_id]);
+          expect(state.rows[0]).toEqual({ status: "failed", last_error: "pdf_real_disabled" });
+        });
+      } finally {
+        await enableRealPdf(false);
+      }
     });
 
     it("says there is no conversation to send to", async () => {

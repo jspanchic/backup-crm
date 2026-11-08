@@ -104,8 +104,8 @@ export const readDocumentPdf = async (deps: DocumentsDeps, documentId: number): 
 };
 
 /**
- * Queues the file for the customer. A real customer receives nothing until JM confirms the legal texts
- * (`confirmed` in settings.json); test leads can always be sent to.
+ * Queues the file for the customer. Real deliveries require confirmed legal texts and the brand switch,
+ * which the database checks when it creates the outbox entry.
  */
 export const sendDocument = async (deps: DocumentsDeps, documentId: number, sender: "human" | "bot" = "human"): Promise<{ outboxId: number }> => {
   const file = await currentFile(deps.db, documentId);

@@ -1,11 +1,11 @@
 # Corte de WhatsApp Salvionix · lunes 09/11
 
-La sesión `salvionix` usa WAHA con el chip real. El flujo será `WAHA → core-api → copia de Javier en n8n → core-api → WAHA`. En la copia de Javier se configuran el ritmo anti-bloqueo y el aviso al equipo. Javier v4 queda activo durante el corte y listo para recibir de nuevo el webhook.
+La sesión `salvionix` usa WAHA GOWS 2026.9.2 con el chip real. El flujo será `WAHA → core-api → copia de Javier en n8n → outbox de core-api → WAHA`. `core-api` coordina el visto, la escritura y el envío. n8n avisa al equipo. Javier v4 queda activo durante el corte y listo para recibir de nuevo el webhook.
 
 ## a. Desplegar con el envío apagado
 
 - [ ] Confirmar con Joel el acceso, la arquitectura, la capacidad y la red Docker compartida por WAHA y n8n. Usar las verificaciones de la [guía del VPS](DESPLIEGUE_VPS_PRUEBAS.md#a-verificaciones-previas-en-el-vps-solo-lectura). En el VPS se necesita Bash, `jq`, `timeout` y Docker Compose 2.24.4 o posterior para aplicar el archivo de producción. [Referencia de Docker Compose](https://docs.docker.com/reference/compose-file/merge/#replace-value).
-- [ ] Preparar el webhook activo de la copia de Javier en `/webhook/<ruta-de-la-copia>`. Usar el contrato de firma, token y herramientas de la [guía de pruebas](DESPLIEGUE_VPS_PRUEBAS.md#d-conexión-con-n8n). En producción, las herramientas usan `http://salvionix-core-api-production:8080`. Retirar `horarios_libres`, `reservar` y `confirmar` de la copia y usar `responder` como única salida hacia WhatsApp. Si `cotizar` devuelve `impuesto_pct=0`, omitir el renglón de impuesto en el mensaje al cliente. Verificar que la copia rechaza una firma inválida antes de ejecutar las herramientas.
+- [ ] Preparar el webhook activo de la copia de Javier en `/webhook/<ruta-de-la-copia>`. En producción, las herramientas usan `http://salvionix-core-api-production:8080`. Retirar `horarios_libres`, `reservar` y `confirmar`. Usar `responder` con el token de conversación y el texto. `core-api` conserva `session` y `chatId`. Desactivar en la copia los nodos que llaman directamente a WAHA o aplican sus esperas. Una nota de voz o un archivo sin texto llega como aviso de texto. Si `cotizar` devuelve `impuesto_pct=0`, omitir el renglón de impuesto en el mensaje al cliente. Verificar que la copia rechaza una firma inválida antes de ejecutar las herramientas. [Guía de pruebas](DESPLIEGUE_VPS_PRUEBAS.md#d-conexión-con-n8n).
 
 En el PC, desde la raíz del repo, construir para la arquitectura que devuelve `uname -m` en el VPS. Para `aarch64`, poner `linux/arm64` en `$plataforma`.
 
@@ -18,7 +18,7 @@ docker save -o salvionix-imagenes.tar salvionix-crm/core-api:production salvioni
 ssh $vps 'mkdir -p ~/salvionix-crm-production ~/salvionix-crm'
 scp salvionix-imagenes.tar "${vps}:~/"
 scp infra/vps/docker-compose.yml infra/vps/docker-compose.production.yml infra/vps/gateway.nginx.template infra/vps/configure-production.sql infra/vps/precios-salvionix.json infra/vps/.env.example "${vps}:~/salvionix-crm-production/"
-scp infra/vps/docker-compose.yml infra/vps/gateway.nginx.template infra/vps/.env.example infra/vps/send-test-message.mjs "${vps}:~/salvionix-crm/"
+scp infra/vps/docker-compose.yml infra/vps/gateway.nginx.template infra/vps/.env.example infra/vps/send-test-message.mjs infra/vps/clean-test-data.sql "${vps}:~/salvionix-crm/"
 ```
 
 En el VPS, preparar el directorio de producción. Mantener `salvionix-crm` como proyecto de pruebas separado.
@@ -39,7 +39,9 @@ crm=(docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod
 sql() { "${crm[@]}" exec -T db psql -X -U core_owner -d salvionix -v ON_ERROR_STOP=1 "$@"; }
 export WAHA_SEND_ENABLED=false
 "${crm[@]}" config -q &&
-  "${crm[@]}" up -d --no-build --wait --wait-timeout 120 db migrate postgrest core-api gateway
+  "${crm[@]}" stop core-api &&
+  "${crm[@]}" up -d --no-build --wait --wait-timeout 120 db migrate postgrest core-api gateway &&
+  "${crm[@]}" up -d --no-build --no-deps --force-recreate --wait gateway
 "${crm[@]}" ps -a
 "${crm[@]}" logs --tail=25 migrate
 sql < configure-production.sql
@@ -52,15 +54,19 @@ sql < configure-production.sql
 "${crm[@]}" run --rm --no-deps -T migrate node scripts/db-import-pricing.ts - < precios-salvionix.json
 ```
 
-- [ ] Validar la base y la puerta interna. En una instalación nueva, esperar impuesto 0, bot y agenda en `f`, un canal `salvionix` real y activo, y cero técnicos, contactos y mensajes en cola. Dejar el panel de producción apagado hasta contar con autenticación de operadores.
+- [ ] Validar la base y la puerta interna. El despliegue detiene el worker anterior antes de migrar y recrea el gateway para cargar la lista nueva de rutas. En una instalación nueva, esperar impuesto 0, bot, agenda y `pdf_clientes_reales` en `f`, un canal `salvionix` real y activo, y cero técnicos, contactos y mensajes en cola. Confirmar que se aplicaron las migraciones de ritmo y PDF. Los valores iniciales del canal son 2000 ms antes del visto, 2000 ms antes de indicar escritura, 2000 ms antes de enviar y 6 envíos por minuto. Dejar el panel de producción apagado hasta contar con autenticación de operadores. [Configuración por canal](DESPLIEGUE_VPS_PRUEBAS.md#d8-ritmo-de-waha-por-canal), [envío de PDF](DATOS_REALES.md#5-envío-de-pdf-a-clientes-reales).
 
 ```bash
 sql <<'SQL'
-SELECT slug, tax_pct, bot_enabled, bot_agenda_enabled FROM core.brands WHERE slug = 'salvionix';
+SELECT slug, tax_pct, bot_enabled, bot_agenda_enabled, pdf_clientes_reales FROM core.brands WHERE slug = 'salvionix';
+SELECT waha_before_seen_ms, waha_before_typing_ms, waha_before_send_ms, waha_messages_per_minute
+FROM core.channels WHERE provider = 'waha' AND identifier = 'salvionix';
 SELECT provider, identifier, bot_key, is_test, active FROM core.channels;
 SELECT count(*) AS technicians FROM core.technicians;
 SELECT count(*) AS contacts FROM public.contacts;
 SELECT count(*) AS queued FROM core.outbox WHERE status IN ('pending', 'sending');
+SELECT count(*) AS uncertain FROM core.outbox WHERE starts_with(last_error, 'delivery_uncertain');
+SELECT filename FROM core.schema_migrations WHERE filename IN ('0022_waha_outbox_pacing.sql', '0023_real_pdf_delivery.sql') ORDER BY filename;
 SQL
 "${crm[@]}" exec -T gateway wget -qO- http://127.0.0.1:8080/healthz
 read -r -p 'Contenedor de n8n: ' N8N_CONTAINER
@@ -76,7 +82,9 @@ docker exec "$N8N_CONTAINER" wget -S -O /dev/null http://salvionix-core-api-prod
 ```bash
 cd ~/salvionix-crm
 export WAHA_SEND_ENABLED=false WAHA_BASE_URL=http://waha.invalid:3000 WAHA_UPSTREAM=waha.invalid:3000
-docker compose config -q && docker compose up -d --no-build --wait --wait-timeout 120 &&
+docker compose config -q && docker compose stop core-api &&
+  docker compose up -d --no-build --wait --wait-timeout 120 &&
+  docker compose up -d --no-build --no-deps --force-recreate --wait gateway &&
   test "$(docker inspect --format '{{.Image}}' "$(docker compose ps -q core-api)")" = \
     "$(docker image inspect --format '{{.Id}}' salvionix-crm/core-api:test)" &&
   docker compose run --rm --no-deps migrate node scripts/db-seed.ts &&
@@ -86,6 +94,7 @@ docker compose logs --tail=50 core-api
 ```
 
 - [ ] Esperar `core-api answered 200`. Verificar que la copia de ensayo ejecuta las herramientas y que `responder` deja una respuesta en la conversación de prueba. El código 200 solo confirma la recepción. El valor USD 1.060 se valida con el importador en a.
+- [ ] Desde `core-api` en el PC, con la base local de pruebas disponible, ejecutar `npm test`. Verificar con WAHA simulado la secuencia de entrada, espera → `sendSeen` → espera → `startTyping` → n8n, y la de salida, espera → `sendText` → `stopTyping`. Las pruebas comprueban además el orden dentro de un chat, el límite global y la recuperación sin duplicar un envío.
 - [ ] Ensayar con el chip de pruebas de BYTOGAM y autorización de Joel. Introducir `WAHA_CONTAINER` y `WAHA_PORT` como en c. Preparar el directorio privado y las funciones `waha` y `wait_working` de d. Usar solo la sesión `bytogam-pruebas` en este ensayo.
 
 ```bash
@@ -101,7 +110,7 @@ test -s "$CUT_DIR/bytogam-ensayo.json" && waha bytogam-pruebas PUT "$CUT_DIR/byt
   wait_working bytogam-pruebas 20 "$CUT_DIR/bytogam-ensayo.json"
 ```
 
-- [ ] Confirmar que un mensaje real de BYTOGAM se despacha a la copia de ensayo. Restaurar su configuración y medir la vuelta a `WORKING`. Si el ensayo de restauración falla o demora un minuto o más, aplazar el corte.
+- [ ] Confirmar que un mensaje real de BYTOGAM se despacha a la copia de ensayo. Para ensayar también la salida, habilitarla solo en la pila aislada con la cola vacía y una entrada real de BYTOGAM. Apagarla al terminar el ensayo. Restaurar la configuración de BYTOGAM y medir la vuelta a `WORKING`. Si el ensayo de restauración falla o demora un minuto o más, aplazar el corte. [Ensayo real aislado](DESPLIEGUE_VPS_PRUEBAS.md#d7-una-prueba-controlada-con-waha-real-solo-si-se-acuerda).
 
 ```bash
 time (test -s "$CUT_DIR/bytogam-antes.json" && waha bytogam-pruebas PUT "$CUT_DIR/bytogam-antes.json" &&
@@ -110,22 +119,28 @@ time (test -s "$CUT_DIR/bytogam-antes.json" && waha bytogam-pruebas PUT "$CUT_DI
 
 ## c. Habilitar la salida a WAHA
 
-- [ ] Volver a `~/salvionix-crm-production`. Verificar otra vez que la cola de producción está vacía y que el bot sigue apagado. Confirmar que los nodos de envío directo están deshabilitados en la copia de Javier.
+- [ ] Volver a `~/salvionix-crm-production`. Verificar que la cola de producción está vacía, que hay cero entregas inciertas y que el bot sigue apagado. Confirmar que los nodos de envío directo están deshabilitados en la copia de Javier. Verificar que el contenedor corresponde a `devlikeapro/waha:gows-2026.9.2`. Su Swagger define `messageIds` para el visto del mensaje entrante y `session` y `chatId` para el indicador de escritura. [Imagen oficial de WAHA](https://hub.docker.com/r/devlikeapro/waha/tags), [contrato de WAHA 2026.9.2](https://github.com/devlikeapro/waha/blob/2026.9.2/src/structures/chatting.dto.ts#L81-L107).
 - [ ] Configurar de forma persistente en el `.env` **de producción** `WAHA_SEND_ENABLED`, `WAHA_UPSTREAM`, `WAHA_BASE_URL` y `WAHA_API_KEY`. La clave se toma de Bitwarden si WAHA la requiere. Para las otras tres variables, usar los comandos siguientes con el nombre y puerto interno verificados de WAHA. En WAHA y n8n se conserva la red compartida de a.
 
 ```bash
 cd ~/salvionix-crm-production
 read -r -p 'Contenedor de WAHA: ' WAHA_CONTAINER
 read -r -p 'Puerto interno de WAHA: ' WAHA_PORT
-[[ "$WAHA_CONTAINER" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$ && "$WAHA_PORT" =~ ^[0-9]+$ ]] &&
-  sed -i -e '/^WAHA_SEND_ENABLED=/d' -e '/^WAHA_BASE_URL=/d' -e '/^WAHA_UPSTREAM=/d' .env &&
-  printf '%s\n' 'WAHA_SEND_ENABLED=true' 'WAHA_BASE_URL=http://gateway:8082' \
-    "WAHA_UPSTREAM=$WAHA_CONTAINER:$WAHA_PORT" >> .env
-unset WAHA_SEND_ENABLED WAHA_BASE_URL WAHA_UPSTREAM
-"${crm[@]}" config -q &&
-  "${crm[@]}" up -d --no-build --wait --wait-timeout 120 core-api gateway
-"${crm[@]}" exec -T core-api node -e 'process.exit(process.env.WAHA_SEND_ENABLED === "true" ? 0 : 1)' && echo 'Envío habilitado'
-sql -c "SELECT count(*) AS queued FROM core.outbox WHERE status IN ('pending', 'sending');"
+if [[ "$WAHA_CONTAINER" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$ && "$WAHA_PORT" =~ ^[0-9]+$ ]] &&
+   [ "$(docker inspect --format '{{.Config.Image}}' "$WAHA_CONTAINER")" = devlikeapro/waha:gows-2026.9.2 ] &&
+   sed -i -e '/^WAHA_SEND_ENABLED=/d' -e '/^WAHA_BASE_URL=/d' -e '/^WAHA_UPSTREAM=/d' .env &&
+   printf '%s\n' 'WAHA_SEND_ENABLED=true' 'WAHA_BASE_URL=http://gateway:8082' \
+     "WAHA_UPSTREAM=$WAHA_CONTAINER:$WAHA_PORT" >> .env; then
+  unset WAHA_SEND_ENABLED WAHA_BASE_URL WAHA_UPSTREAM
+  "${crm[@]}" config -q &&
+    "${crm[@]}" up -d --no-build --wait --wait-timeout 120 core-api gateway &&
+    "${crm[@]}" exec -T core-api node -e 'process.exit(process.env.WAHA_SEND_ENABLED === "true" ? 0 : 1)' &&
+    echo 'Envío habilitado'
+  sql -c "SELECT count(*) AS queued FROM core.outbox WHERE status IN ('pending', 'sending');"
+  sql -c "SELECT count(*) AS uncertain FROM core.outbox WHERE starts_with(last_error, 'delivery_uncertain');"
+else
+  printf '%s\n' 'Detén el corte y revisa la configuración y la imagen de WAHA.' >&2
+fi
 ```
 
 ## d. Cambiar solo el webhook de `salvionix`
@@ -201,7 +216,7 @@ jq -e --rawfile old "$CUT_DIR/v4-url" --rawfile key "$CUT_DIR/hmac" \
   else . end)' "$CUT_DIR/v4.json" > "$CUT_DIR/corte.json"
 ```
 
-- [ ] Una vez revisadas ambas peticiones, habilitar el bot y aplicar el cambio. La actualización exige una lista vigente aprobada, impuesto 0, agenda apagada y cola vacía. Si el cambio o la comprobación falla, ejecutar f.
+- [ ] Una vez revisadas ambas peticiones, habilitar el bot y aplicar el cambio. La actualización exige una lista vigente aprobada, impuesto 0, agenda apagada, cola vacía y cero entregas inciertas. Si el cambio o la comprobación falla, ejecutar f.
 
 ```bash
 enable_salvionix_bot() {
@@ -212,7 +227,8 @@ WHERE b.slug = 'salvionix' AND NOT b.bot_enabled AND NOT b.bot_agenda_enabled
   AND b.tax_pct = 0 AND b.discount_enabled
   AND EXISTS (SELECT 1 FROM core.price_lists p
               WHERE p.id = core.active_price_list(b.id) AND p.is_confirmed AND p.currency = 'USD')
-  AND NOT EXISTS (SELECT 1 FROM core.outbox WHERE status IN ('pending', 'sending'))
+  AND NOT EXISTS (SELECT 1 FROM core.outbox WHERE status IN ('pending', 'sending')
+                  OR starts_with(last_error, 'delivery_uncertain'))
 RETURNING b.slug;
 SQL
   ) && [ "$changed" = salvionix ]
@@ -227,6 +243,7 @@ test -s "$CUT_DIR/v4.json" && test -s "$CUT_DIR/corte.json" && enable_salvionix_
 
 - [ ] Pedir al equipo que envíe desde sus propios números 2–3 mensajes directos al chip `salvionix`, uno a la vez. Empezar con un saludo, seguir con el caso de 8.000 pies cubiertos y 3.000 descubiertos y, si hace falta, preguntar por una fecha. En la cotización esperar USD 1.060 y verificar que el mensaje al cliente omite el renglón de impuesto. En la consulta por fecha, esperar la alternativa definida en n8n, sin reserva ni confirmación.
 - [ ] Para cada mensaje, comprobar una sola respuesta visible, su ejecución en la copia de Javier y la salida correspondiente en `sent`. Confirmar que v4 no recibe estas entradas y que el equipo recibe el aviso configurado en n8n. Si hay duplicados, respuesta desde v4, precio incorrecto, errores de firma persistentes o no llega respuesta, ejecutar f.
+- [ ] Observar el visto y el indicador de escritura antes de la ejecución de n8n. Tras encolar la respuesta, comprobar que llega una sola vez y cesa el indicador. Los logs de la puerta deben mostrar `sendSeen`, `startTyping`, el webhook de n8n, `sendText` y `stopTyping`. Verificar las esperas del canal y el límite global.
 
 ## f. Apagar el bot o volver a v4
 
@@ -236,24 +253,34 @@ Interruptor de Salvionix. Toma efecto al confirmar la actualización en la base.
 sql -c "UPDATE core.brands SET bot_enabled = false WHERE slug = 'salvionix' RETURNING slug, bot_enabled;"
 ```
 
-Para volver a Javier v4, usar la terminal preparada en d. La ruta de v4 debe seguir activa en n8n. La restauración usa el mismo `PUT` que se ensayó en BYTOGAM. El comando tiene un límite de 55 segundos para apagar, restaurar y verificar `WORKING`. Si no se cumple, conservar el bot apagado, consultar el estado de la sesión y avisar a Joel.
+Para volver a Javier v4, usar la terminal preparada en d. La ruta de v4 debe seguir activa en n8n. El rollback detiene `core-api`, deja el envío apagado y restaura el webhook con el mismo `PUT` de WAHA que se ensayó en BYTOGAM. El comando tiene un límite de 55 segundos. Se considera completo cuando `core-api` está detenido y WAHA vuelve a `WORKING` con el webhook anterior. Si falla una parte, verifica ambos estados y avisa a Joel.
 
 ```bash
 rollback_to_v4() {
   local -a compose=(docker compose --env-file .env -f docker-compose.yml -f docker-compose.production.yml)
-  test -s "$CUT_DIR/v4.json" &&
-    { timeout 5s "${compose[@]}" exec -T db psql -X -U core_owner -d salvionix -v ON_ERROR_STOP=1 \
-        -c "UPDATE core.brands SET bot_enabled = false WHERE slug = 'salvionix';" ||
-      timeout 5s "${compose[@]}" kill core-api; } &&
-    waha salvionix PUT "$CUT_DIR/v4.json" &&
-    wait_working salvionix 45 "$CUT_DIR/v4.json"
+  local stopped=0 disabled=0 running
+  cd ~/salvionix-crm-production && test -s "$CUT_DIR/v4.json" || return 1
+  export WAHA_SEND_ENABLED=false
+  if timeout 6s "${compose[@]}" stop --timeout 0 core-api ||
+     timeout 4s "${compose[@]}" kill core-api; then
+    stopped=1
+  fi
+  if sed -i '/^WAHA_SEND_ENABLED=/d' .env &&
+     printf '%s\n' 'WAHA_SEND_ENABLED=false' >> .env &&
+     timeout 3s "${compose[@]}" exec -T db psql -X -U core_owner -d salvionix -v ON_ERROR_STOP=1 \
+       -c "UPDATE core.brands SET bot_enabled = false WHERE slug = 'salvionix';"; then
+    disabled=1
+  fi
+  waha salvionix PUT "$CUT_DIR/v4.json" &&
+    wait_working salvionix 16 "$CUT_DIR/v4.json" || return 1
+  running=$(timeout 3s "${compose[@]}" ps -q core-api) && [ -z "$running" ] && (( stopped && disabled ))
 }
 export CUT_DIR WAHA_CONTAINER WAHA_PORT
 export -f waha wait_working rollback_to_v4
 timeout 55s bash -c 'set -o pipefail; rollback_to_v4'
 ```
 
-- [ ] Verificar con un mensaje del equipo que vuelve a responder v4. Conservar la base de producción y revisar el intervalo del corte antes de cualquier reintento. Si se usó `kill`, confirmar `bot_enabled = false` antes de levantar de nuevo `core-api`.
+- [ ] Verificar con un mensaje del equipo que vuelve a responder v4. Conservar la base de producción y `core-api` detenido. Antes de preparar un nuevo corte, revisar las entregas que WAHA pudo haber aceptado justo antes de la parada. Mantener el binario compatible con la base migrada.
 
 ## g. Revisar la primera hora
 
@@ -272,10 +299,45 @@ SELECT o.status, count(*) AS total, max(o.attempts) AS attempts
 FROM core.outbox o JOIN core.brands b ON b.id = o.brand_id
 WHERE b.slug = 'salvionix' AND (o.created_at > now() - interval '10 minutes' OR o.status IN ('pending', 'sending'))
 GROUP BY o.status ORDER BY o.status;
+SELECT o.id, o.attempts, o.last_error
+FROM core.outbox o JOIN core.brands b ON b.id = o.brand_id
+WHERE b.slug = 'salvionix' AND o.last_error LIKE 'delivery_uncertain%'
+ORDER BY o.id;
 SELECT count(*) AS unrouted
 FROM core.unrouted_events WHERE received_at > now() - interval '10 minutes';
 SQL
 ```
 
 - [ ] Vigilar `401` de firma, `400` de payload, `5xx`, `bot rejected the message`, `bot call failed`, `outbox send failed`, cola que crece y sesiones WAHA que salen de `WORKING`. Un `200` de entrada no confirma ni la ejecución en n8n ni el envío al cliente.
-- [ ] Revisar en n8n las ejecuciones, el ritmo, los avisos y cualquier señal de restricción del chip. Guardar evidencia con conteos, códigos y estados. Mantener los archivos privados de rollback accesibles hasta cerrar la ventana con Joel.
+- [ ] Revisar en `core-api` el ritmo, las reprogramaciones y los casos `delivery_uncertain`. Cada caso incierto detiene su chat. Revisar en n8n las ejecuciones y los avisos al equipo, y en WAHA cualquier señal de restricción del chip. Guardar evidencia con conteos, códigos y estados. Mantener los archivos privados de rollback accesibles hasta cerrar la ventana con Joel.
+
+### Conciliar una entrega incierta
+
+Revisa el chat y la evidencia de WAHA con Joel. Si se confirma que se entregó, márcala `sent` y libera el chat. Si se confirma que WAHA no llegó a enviarla, reencólala con el mismo ID de outbox. Si sigue sin poder confirmarse, déjala en revisión. Ejecuta solo el bloque que corresponda al resultado comprobado. El `UPDATE` debe devolver el ID indicado y su nuevo estado.
+
+```bash
+# Entrega confirmada. sent_at registra el momento de la conciliación.
+read -r -p 'ID del outbox entregado: ' OUTBOX_ID
+sql -v outbox_id="$OUTBOX_ID" <<'SQL'
+UPDATE core.outbox o SET status = 'sent', sent_at = now(), last_error = 'delivery_reviewed_sent'
+FROM core.brands b
+WHERE o.id = :'outbox_id'::bigint AND b.id = o.brand_id AND b.slug = 'salvionix'
+  AND o.status = 'failed' AND starts_with(o.last_error, 'delivery_uncertain')
+  AND (o.claim_expires_at IS NULL OR o.claim_expires_at <= now())
+RETURNING o.id, o.status;
+SQL
+```
+
+```bash
+# No se envió, confirmado en WAHA. La nueva entrega sigue sujeta al límite del outbox.
+read -r -p 'ID del outbox que WAHA no envió: ' OUTBOX_ID
+sql -v outbox_id="$OUTBOX_ID" <<'SQL'
+UPDATE core.outbox o SET status = 'pending', scheduled_at = now(), delivery_retries = 0,
+                         claim_expires_at = NULL, send_started_at = NULL, last_error = 'delivery_reviewed_not_sent'
+FROM core.brands b
+WHERE o.id = :'outbox_id'::bigint AND b.id = o.brand_id AND b.slug = 'salvionix'
+  AND o.status = 'failed' AND starts_with(o.last_error, 'delivery_uncertain')
+  AND (o.claim_expires_at IS NULL OR o.claim_expires_at <= now())
+RETURNING o.id, o.status;
+SQL
+```

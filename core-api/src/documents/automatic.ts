@@ -8,14 +8,15 @@ import type { DocumentType } from "./view.ts";
  *  - a confirmed appointment: the purchase order, sent to the customer, and the work order, which is only issued
  *    (it is for the technician and never goes to the customer).
  *
- * Two rules keep it safe:
+ * The safeguards:
  *  - It never throws. A PDF that fails (the engine is down, a template is wrong) must not break a quote or a
  *    confirmation the customer is waiting for: it is logged and the panel can issue the document by hand.
  *  - A real customer gets nothing automatic while the legal texts are unconfirmed (`confirmed` in settings.json).
  *    Nothing is even issued then, so the numbered series of real documents has no draft in it. Test leads always do.
+ *  - Customer-facing files also require the brand's PDF switch. Internal work orders stay available.
  */
 
-type Target = { deal_id: number; is_test: boolean; appointment_id: number | null };
+type Target = { deal_id: number; is_test: boolean; pdf_clientes_reales: boolean; appointment_id: number | null };
 
 export type AutomaticDeps = DocumentsDeps & { log: FastifyBaseLogger };
 
@@ -56,13 +57,15 @@ const eligibleTarget = async (deps: AutomaticDeps, conversationId: number): Prom
   return target;
 };
 
+const canSendToCustomer = (target: Target): boolean => target.is_test || target.pdf_clientes_reales;
+
 /** Starts the quote PDF for the conversation's deal. Resolves with what the bot may say about it. */
 export const documentForQuote = async (deps: AutomaticDeps, conversationId: number): Promise<DocumentOutcome> => {
   let target: Target | null = null;
   const ok = await attempt(deps, "target", async () => {
     target = await eligibleTarget(deps, conversationId);
   });
-  if (!ok || !target) return { documento: "no_disponible" };
+  if (!ok || !target || !canSendToCustomer(target)) return { documento: "no_disponible" };
   const done = await issueAndMaybeSend(deps, target, "quote", true);
   return { documento: done ? "en_cola" : "no_disponible" };
 };
@@ -74,7 +77,7 @@ export const documentsForConfirmation = async (deps: AutomaticDeps, conversation
     target = await eligibleTarget(deps, conversationId);
   });
   if (!ok || !target) return { documento: "no_disponible" };
-  const order = await issueAndMaybeSend(deps, target, "purchase_order", true);
+  const order = canSendToCustomer(target) && await issueAndMaybeSend(deps, target, "purchase_order", true);
   // The work order does not depend on the purchase order: one failing does not stop the other.
   await issueAndMaybeSend(deps, target, "work_order", false);
   return { documento: order ? "en_cola" : "no_disponible" };

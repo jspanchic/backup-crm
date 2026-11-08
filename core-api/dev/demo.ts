@@ -13,6 +13,8 @@ export type DemoDeps = {
 };
 
 const DAY_MS = 86_400_000;
+// A single demo turn can enqueue two replies and a PDF, each with its own typing delay and global spacing.
+const WAHA_REPLY_TIMEOUT_MS = 60_000;
 
 /**
  * The demo, step by step. Everything the customers see goes through the real door (a signed webhook to
@@ -29,6 +31,11 @@ export const runDemo = async ({ sim, waha, db, print = console.log }: DemoDeps):
   const step = (title: string) => print(`\n━━ ${title}`);
   const one = async <T = any>(sql: string, values: unknown[] = []): Promise<T | undefined> => (await db.query(sql, values)).rows[0] as T | undefined;
   const quoted = (text: string) => text.split("\n").map((line, index) => (index === 0 ? line : `        ${line}`)).join("\n");
+  const outboundCount = async (phone: string): Promise<number> => (await one<{ n: number }>(
+    `select count(*)::int as n from core.outbox o join core.channels c on c.id = o.channel_id
+      where c.provider = 'waha' and c.identifier = $1 and o.destination = $2`,
+    [sim.session, `${phone}@c.us`],
+  ))!.n;
 
   /** `nickname` is what WhatsApp shows for the contact; `name` is who they say they are. */
   const customer = (name: string, nickname: string, phone = fakePhone()) => {
@@ -41,7 +48,7 @@ export const runDemo = async ({ sim, waha, db, print = console.log }: DemoDeps):
       if (sent.status !== 200) throw new Error(`core-api answered ${sent.status} to a signed message`);
       const replies = options.replies ?? 1;
       if (replies === 0) return [];
-      const deadline = Date.now() + 15_000;
+      const deadline = Date.now() + WAHA_REPLY_TIMEOUT_MS;
       while (textsNow().length < before + replies) {
         if (Date.now() > deadline) throw new Error(`timed out waiting for reply ${before + replies} to ${phone} (got ${textsNow().length})`);
         await new Promise((done) => setTimeout(done, 50));
@@ -51,11 +58,12 @@ export const runDemo = async ({ sim, waha, db, print = console.log }: DemoDeps):
       return fresh;
     };
     const silence = async (text: string, waitMs = 1_500): Promise<number> => {
-      const before = waha.to(phone).length;
+      // A reply can wait in the queue for much longer than this observation interval.
+      const before = await outboundCount(phone);
       print(`   👤 ${name}: ${text}`);
       await sendInbound(sim, { phone, text, pushName: nickname });
       await new Promise((done) => setTimeout(done, waitMs));
-      return waha.to(phone).length - before;
+      return await outboundCount(phone) - before;
     };
     return { name, phone, speak, silence };
   };
@@ -226,7 +234,7 @@ export const runDemo = async ({ sim, waha, db, print = console.log }: DemoDeps):
 
   const filesTo = (c: Customer) => waha.to(c.phone).filter((message) => message.file);
   const waitForFiles = async (c: Customer, count: number) => {
-    const deadline = Date.now() + 15_000;
+    const deadline = Date.now() + WAHA_REPLY_TIMEOUT_MS;
     while (filesTo(c).length < count) {
       if (Date.now() > deadline) throw new Error(`timed out waiting for file ${count} to ${c.phone} (got ${filesTo(c).length})`);
       await new Promise((done) => setTimeout(done, 50));
@@ -276,10 +284,10 @@ export const runDemo = async ({ sim, waha, db, print = console.log }: DemoDeps):
   step("Extra · Mensajes que no deben pasar");
   const probe = customer("Probador", "Probador");
   const [original, duplicate] = await sendTwice(sim, { phone: probe.phone, text: "Hola, mensaje repetido", pushName: "Probador" });
-  await waha.waitFor(probe.phone, 1);
+  await waha.waitFor(probe.phone, 1, WAHA_REPLY_TIMEOUT_MS);
   await new Promise((done) => setTimeout(done, 800));
   check((original.body as { status: string }).status === "accepted" && (duplicate.body as { status: string }).status === "duplicate", "el mismo mensaje entregado dos veces se descarta la segunda vez");
-  check(waha.to(probe.phone).length === 1, "y Javier contesta una sola vez");
+  check(waha.to(probe.phone).length === 1 && await outboundCount(probe.phone) === 1, "y Javier contesta una sola vez");
   const badSim = { ...sim, hmacSecret: "x".repeat(40) };
   const forged = await sendInbound(badSim, { phone: probe.phone, text: "mensaje falso" });
   check(forged.status === 401, "un mensaje con firma falsa se rechaza con 401 y no cambia nada");

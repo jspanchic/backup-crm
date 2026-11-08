@@ -226,7 +226,7 @@ try {
     await new Promise((done) => setTimeout(done, 50));
   }
   const result = await work;
-  await waha.waitFor(phone, before + 1, 20_000);
+  await waha.waitFor(phone, before + 1, 60_000);
   const reply = waha.to(phone)[before]?.text ?? "";
   console.log(`   🤖 Javier: ${reply.split("\n").map((line, index) => (index === 0 ? line : `        ${line}`)).join("\n")}`);
 

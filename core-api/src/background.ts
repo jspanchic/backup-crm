@@ -15,13 +15,22 @@ export const DEFAULT_INTERVALS: Intervals = { outboxMs: 1_000, sweepMs: 30_000, 
 export const startBackground = (
   deps: { app: BuiltApp; db: Db; bot: BotDeps; outbox: OutboxDeps },
   intervals: Intervals = DEFAULT_INTERVALS,
-): (() => void) => {
+): (() => Promise<void>) => {
   const { app, db, bot, outbox } = deps;
+  let activeOutbox: Promise<unknown> | undefined;
   const timers = [
-    setInterval(() => void runOutboxOnce(outbox).catch((error: Error) => app.log.error({ err: error.name }, "outbox loop")), intervals.outboxMs),
+    setInterval(() => {
+      if (activeOutbox) return;
+      activeOutbox = runOutboxOnce(outbox)
+        .catch((error: Error) => app.log.error({ err: error.name }, "outbox loop"))
+        .finally(() => { activeOutbox = undefined; });
+    }, intervals.outboxMs),
     setInterval(() => void sweepPendingDispatches(bot).catch((error: Error) => app.log.error({ err: error.name }, "sweep loop")), intervals.sweepMs),
     // Holds that ran out stop blocking a time as soon as they are marked; the booking function also does it.
     setInterval(() => void db.query("select api.expire_holds()").catch((error: Error) => app.log.error({ err: error.name }, "expiry loop")), intervals.expiryMs),
   ];
-  return () => timers.forEach(clearInterval);
+  return async () => {
+    timers.forEach(clearInterval);
+    await activeOutbox;
+  };
 };

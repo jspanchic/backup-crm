@@ -102,7 +102,7 @@ const pdfNotice = (outcome: DocumentOutcome, what: string) => ({
       : `No se envió ningún PDF de ${what}. No lo menciones ni lo prometas.`,
 });
 
-type ToolContext = { conversationId: number; paused: boolean; agendaEnabled: boolean };
+type ToolContext = { conversationId: number; paused: boolean; agendaEnabled: boolean; inboundMessageId?: number };
 type ToolConversation = {
   conversation_id: number;
   bot_paused: boolean;
@@ -147,7 +147,12 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
       await reply.code(409).send({ error: "conversation_closed" });
       return null;
     }
-    return { conversationId: found.conversation_id, paused: found.bot_paused, agendaEnabled: found.bot_agenda_enabled };
+    return {
+      conversationId: found.conversation_id,
+      paused: found.bot_paused,
+      agendaEnabled: found.bot_agenda_enabled,
+      inboundMessageId: verified.claims.inboundMessageId,
+    };
   };
 
   const readBody = (request: FastifyRequest): unknown => {
@@ -310,7 +315,7 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
     return rows[0].result;
   });
 
-  tool("POST", "/tools/responder", { schema: replySchema }, async ({ conversationId }, input, reply) => {
+  tool("POST", "/tools/responder", { schema: replySchema }, async ({ conversationId, inboundMessageId }, input, reply) => {
     const { rows } = await deps.db.query<{ facts: ReplyFacts }>("select api.reply_facts($1) as facts", [conversationId]);
     const facts = rows[0].facts;
     const review = reviewReply(input.texto, facts);
@@ -320,7 +325,9 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
     }
     // The history keeps the placeholder; only the message that leaves carries the number.
     const outgoing = facts.phone_e164 ? input.texto.replaceAll(PHONE_PLACEHOLDER, phoneForCustomer(facts.phone_e164)) : input.texto;
-    const queued = await deps.db.query("select api.enqueue_outbound($1, $2, 'bot', $3) as id", [conversationId, input.texto, outgoing]);
+    const queued = await deps.db.query("select api.enqueue_outbound($1, $2, 'bot', $3, $4) as id", [
+      conversationId, input.texto, outgoing, inboundMessageId ?? null,
+    ]);
     return reply.code(200).send({ encolado: true, id: Number(queued.rows[0].id) });
   });
 };

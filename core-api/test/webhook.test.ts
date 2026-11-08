@@ -1,7 +1,7 @@
 import { createHmac, randomUUID } from "node:crypto";
 import type pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { sweepPendingDispatches } from "../src/bot.ts";
+import { dispatchToBot, sweepPendingDispatches } from "../src/bot.ts";
 import { signBotRequest } from "../src/signature.ts";
 import { verifyConversationToken } from "../src/token.ts";
 import {
@@ -110,6 +110,7 @@ describe("webhook", () => {
         payload: `{"session":"${SESSION}","pad":"${"x".repeat(1_100_000)}"}`,
       });
       expect(big.statusCode).toBe(413);
+      await test.app.idle();
     });
 
     it.each([
@@ -320,19 +321,31 @@ describe("webhook", () => {
 
     it("keeps a voice note or file as a marker", async () => {
       const { id } = await send({ body: "", hasMedia: true });
-      expect((await owner.query("select body from core.messages where provider_message_id = $1", [id])).rows[0].body).toContain("nota de voz");
+      const marker = "[El cliente envió un audio o archivo sin texto]";
+      expect((await owner.query("select body from core.messages where provider_message_id = $1", [id])).rows[0].body).toBe(marker);
+      expect(lastBotBody().mensaje.texto).toBe(marker);
     });
   });
 
   describe("the call to the bot", () => {
     it("answers WAHA before the bot finishes", async () => {
       let release!: () => void;
+      let announce!: () => void;
+      const started = new Promise<void>((resolve) => { announce = resolve; });
+      const blocked = new Promise<void>((resolve) => { release = resolve; });
       const calls = test.botCalls.length;
-      test.botAnswers.next = () => new Promise((resolve) => (release = () => resolve({ ok: true, status: 200 })));
+      test.botAnswers.next = async () => {
+        announce();
+        await blocked;
+        return { ok: true, status: 200 };
+      };
       try {
-        const response = await post(test, delivery());
+        const body = delivery();
+        const response = await post(test, body);
         expect(response.statusCode).toBe(200);
-        await new Promise((done) => setTimeout(done, 50));
+        await started;
+        const messageId = await scalar("select id::int as n from core.messages where provider_message_id = $1", [idOf(body)]);
+        expect(await dispatchToBot(test.botDeps, messageId)).toBe("skipped");
         expect(test.botCalls.length - calls).toBe(1);
       } finally {
         release();

@@ -13,9 +13,6 @@ services:
       WAHA_HMAC_BYTOGAM_PRUEBAS: ""
       WAHA_HMAC_SALVIONIX: ${WAHA_HMAC_SALVIONIX:?missing WAHA_HMAC_SALVIONIX}
       WAHA_SEND_ENABLED: ${WAHA_SEND_ENABLED:-false}
-      # The Javier copy owns pacing for this rollout.
-      OUTBOX_PACE_MIN_MS: "0"
-      OUTBOX_PACE_MAX_MS: "0"
 
   gateway:
     networks:

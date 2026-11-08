@@ -19,6 +19,13 @@ export const POSTGREST_TEST_URL = process.env.POSTGREST_TEST_URL ?? `http://127.
 export const ownerClient = () => owner(TEST_DB);
 export const coreApiClient = () => connect("core_api", requireEnv("CORE_API_PASSWORD"), TEST_DB);
 
+/** The integration files share a throwaway database, including the delivery window. */
+export const clearOutboxForTest = async (db: pg.Client): Promise<void> => {
+  await db.query("update core.outbox set status = 'failed', last_error = 'cleared by a test', claim_expires_at = null where status in ('pending', 'sending')");
+  await db.query("update core.outbox set claim_expires_at = null where claim_expires_at is not null");
+  await db.query("truncate core.outbox_send_attempts");
+};
+
 export type Lead = { contactId: number; dealId: number };
 
 export const createLead = async (db: pg.Client, { isTest = false } = {}): Promise<Lead> => {

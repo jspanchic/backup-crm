@@ -15,6 +15,8 @@ const envelope = z.object({
     participant: z.string().max(200).optional(),
     body: z.string().max(10_000).nullish(),
     hasMedia: z.boolean().optional(),
+    media: z.object({}).nullish(),
+    type: z.string().optional(),
     notifyName: z.string().max(200).optional(),
     _data: z
       .object({
@@ -62,9 +64,11 @@ const isOwnOrForeign = (delivery: WahaDelivery): boolean => {
 };
 
 const chatPart = (value: string): string => value.split("@")[0].split(":")[0];
+const mediaTypes = new Set(["audio", "ptt", "voice", "image", "video", "document", "sticker"]);
 
 export type Accepted = {
   providerMessageId: string;
+  chatId: string;
   sentAt: Date;
   body: string;
   phone: string | null;
@@ -88,11 +92,13 @@ export const toAccepted = (delivery: WahaDelivery, now: Date): { ignore: true } 
     phone = toE164(candidate);
     if (phone) break;
   }
-  const lid = payload.from?.endsWith("@lid") ? payload.from : null;
+  const sender = /^(\d+)(?::\d+)?@(c\.us|s\.whatsapp\.net|lid)$/.exec(payload.from ?? "");
+  const lid = sender?.[2] === "lid" ? `${sender[1]}@lid` : null;
   if (!phone && !lid) return { ignore: true };
+  const chatId = lid ?? `${sender?.[1] ?? phone!.slice(1)}@c.us`;
 
   const text = (payload.body ?? "").trim();
-  if (!text && !payload.hasMedia) return { ignore: true };
+  if (!text && !payload.hasMedia && !payload.media && !mediaTypes.has(payload.type ?? "")) return { ignore: true };
 
   const seconds = payload.timestamp;
   const sentAt = seconds && seconds > 1_000_000_000 && seconds < 100_000_000_000 ? new Date(seconds * 1000) : now;
@@ -101,8 +107,9 @@ export const toAccepted = (delivery: WahaDelivery, now: Date): { ignore: true } 
     ignore: false,
     message: {
       providerMessageId: payload.id,
+      chatId,
       sentAt,
-      body: text ? redactCards(text) : "[archivo o nota de voz sin texto]",
+      body: text ? redactCards(text) : "[El cliente envió un audio o archivo sin texto]",
       phone,
       lid: phone ? null : lid,
       pushName: info.PushName ?? payload.notifyName ?? null,

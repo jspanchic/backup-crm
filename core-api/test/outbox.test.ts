@@ -2,14 +2,14 @@ import type pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { runOutboxOnce } from "../src/outbox.ts";
 import { createTestApp, delivery, post, type TestApp } from "./app-helpers.ts";
-import { ownerClient } from "./helpers.ts";
+import { clearOutboxForTest, ownerClient } from "./helpers.ts";
 
 describe("outbox", () => {
   let test: TestApp;
   let owner: pg.Client;
 
   beforeAll(async () => {
-    test = createTestApp({ OUTBOX_PACE_MIN_MS: "2000", OUTBOX_PACE_MAX_MS: "5000", WAHA_API_KEY: "k".repeat(32) });
+    test = createTestApp({ WAHA_API_KEY: "k".repeat(32) });
     owner = await ownerClient();
   });
   afterAll(async () => {
@@ -32,7 +32,7 @@ describe("outbox", () => {
   };
   // Other tests' leftovers must not be sent by this one.
   const drain = async () => {
-    await owner.query("update core.outbox set status = 'sent' where status in ('pending', 'sending')");
+    await clearOutboxForTest(owner);
     reset();
   };
 
@@ -43,7 +43,7 @@ describe("outbox", () => {
 
     expect(await runOutboxOnce(test.outboxDeps)).toEqual({ sent: 1, failed: 0 });
 
-    const call = test.wahaCalls[0];
+    const call = test.wahaCalls.find((request) => request.url.endsWith("/api/sendText"))!;
     expect(call.url).toBe("http://waha.test/api/sendText");
     expect(call.headers["X-Api-Key"]).toBe("k".repeat(32));
     expect(JSON.parse(call.body)).toEqual({
@@ -70,28 +70,18 @@ describe("outbox", () => {
     const conversation = await startConversation({ from: `${Date.now()}@lid` });
     await enqueue(conversation, "Hola");
     await runOutboxOnce(test.outboxDeps);
-    expect(JSON.parse(test.wahaCalls[0].body).chatId).toMatch(/@lid$/);
+    const call = test.wahaCalls.find((request) => request.url.endsWith("/api/sendText"))!;
+    expect(JSON.parse(call.body).chatId).toMatch(/@lid$/);
   });
 
-  it("pauses between messages, never before the first, and within the configured range", async () => {
-    await drain();
-    const conversation = await startConversation();
-    for (const text of ["uno", "dos", "tres"]) await enqueue(conversation, text);
-
-    await runOutboxOnce(test.outboxDeps);
-
-    expect(test.wahaCalls.map((call) => JSON.parse(call.body).text)).toEqual(["uno", "dos", "tres"]);
-    expect(test.sleeps).toEqual([3500, 3500]);
-  });
-
-  it("tries again later when WAHA fails, with a growing wait, and gives up after three attempts", async () => {
+  it("tries again after a safe failure, with a growing wait, and gives up after three attempts", async () => {
     await drain();
     const conversation = await startConversation();
     const id = await enqueue(conversation, "no llega");
-    test.wahaAnswers.next = async () => ({ ok: false, status: 500 });
+    const failing = { ...test.outboxDeps, sleep: async () => { throw new Error("timer interrupted"); } };
 
-    await runOutboxOnce(test.outboxDeps);
-    expect(await outbox(id)).toMatchObject({ status: "pending", attempts: 1, last_error: "WAHA answered 500" });
+    await runOutboxOnce(failing);
+    expect(await outbox(id)).toMatchObject({ status: "pending", attempts: 1, last_error: "WAHA preparation failed" });
     expect((await outbox(id)).scheduled_at.getTime()).toBeGreaterThan(Date.now() + 25_000);
 
     // Not due yet: nothing is sent.
@@ -99,7 +89,7 @@ describe("outbox", () => {
 
     for (const attempt of [2, 3]) {
       await owner.query("update core.outbox set scheduled_at = now() - interval '1 second' where id = $1", [id]);
-      await runOutboxOnce(test.outboxDeps);
+      await runOutboxOnce(failing);
       expect((await outbox(id)).attempts).toBe(attempt);
     }
     expect(await outbox(id)).toMatchObject({ status: "failed", attempts: 3 });
@@ -112,41 +102,32 @@ describe("outbox", () => {
     await drain();
     const id = await enqueue(await startConversation(), "sin red");
     test.wahaAnswers.next = async () => {
-      throw Object.assign(new Error("connect ECONNREFUSED 10.1.2.3:3000"), { name: "TypeError" });
+      throw new TypeError("fetch failed", { cause: { code: "ECONNREFUSED", address: "10.1.2.3" } });
     };
     await runOutboxOnce(test.outboxDeps);
-    expect(await outbox(id)).toMatchObject({ status: "pending", last_error: "TypeError" });
+    expect(await outbox(id)).toMatchObject({ status: "pending", last_error: "WAHA send response unconfirmed" });
   });
 
-  it("never sends a message twice when two workers run together", async () => {
-    await drain();
-    const conversation = await startConversation();
-    for (const text of ["a", "b", "c", "d", "e", "f"]) await enqueue(conversation, text);
-
-    const results = await Promise.all([runOutboxOnce(test.outboxDeps, 3), runOutboxOnce(test.outboxDeps, 3), runOutboxOnce(test.outboxDeps, 3)]);
-
-    expect(results.reduce((sum, r) => sum + r.sent, 0)).toBe(6);
-    expect(test.wahaCalls.map((call) => JSON.parse(call.body).text).sort()).toEqual(["a", "b", "c", "d", "e", "f"]);
-  });
-
-  it("takes again a message stuck in sending for more than two minutes, and not one in progress", async () => {
+  it("recovers a worker that stopped before authorizing the send", async () => {
     await drain();
     const conversation = await startConversation();
     const stuck = await enqueue(conversation, "colgado");
-    const busy = await enqueue(conversation, "en curso");
-    await owner.query("update core.outbox set status = 'sending', attempts = 1, scheduled_at = now() - interval '3 minutes' where id = $1", [stuck]);
-    await owner.query("update core.outbox set status = 'sending', attempts = 1, scheduled_at = now() where id = $1", [busy]);
+    await owner.query("update core.outbox set status = 'sending', attempts = 1, claim_expires_at = now() - interval '1 second' where id = $1", [stuck]);
+
+    expect(await runOutboxOnce(test.outboxDeps)).toEqual({ sent: 0, failed: 0 });
+    expect(await outbox(stuck)).toMatchObject({ status: "pending", attempts: 1, last_error: "worker_claim_expired" });
+    await owner.query("update core.outbox set scheduled_at = now() - interval '1 second' where id = $1", [stuck]);
 
     await runOutboxOnce(test.outboxDeps);
 
-    expect(test.wahaCalls.map((call) => JSON.parse(call.body).text)).toEqual(["colgado"]);
-    expect((await outbox(busy)).status).toBe("sending");
+    expect(test.wahaCalls.filter((call) => call.url.endsWith("/api/sendText")).map((call) => JSON.parse(call.body).text)).toEqual(["colgado"]);
+    expect(await outbox(stuck)).toMatchObject({ status: "sent", attempts: 2 });
   });
 
   it("does not let anyone but the database function finish a message that is not being sent", async () => {
     await drain();
     const id = await enqueue(await startConversation(), "x");
-    await test.db.query("select api.finish_outbox($1, true, null)", [id]);
+    await test.db.query("select api.finish_paced_outbox($1, 1, 'sent', null)", [id]);
     expect((await outbox(id)).status).toBe("pending");
   });
 

@@ -144,10 +144,10 @@ describe("reading a delivery", () => {
     expect(read({ from: "12025550123@c.us" }, { event: "message" })).toMatchObject({ ignore: false });
   });
 
-  it("keeps a voice note or file with no text, with a marker", () => {
-    expect(read({ from: "12025550123@c.us", body: "", hasMedia: true })).toMatchObject({
+  it.each([{ hasMedia: true }, { media: {} }, { type: "audio" }])("keeps a voice note or file with no text, with a marker", (media) => {
+    expect(read({ from: "12025550123@c.us", body: "", ...media })).toMatchObject({
       ignore: false,
-      message: { body: "[archivo o nota de voz sin texto]" },
+      message: { body: "[El cliente envió un audio o archivo sin texto]" },
     });
   });
 

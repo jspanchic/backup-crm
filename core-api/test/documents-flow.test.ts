@@ -7,7 +7,7 @@ import { PdfEngineError } from "../src/documents/gotenberg.ts";
 import { runOutboxOnce } from "../src/outbox.ts";
 import { at, createSetup, day, freeTimes, startLead, toolCall, type Lead, type Setup } from "./agenda-helpers.ts";
 import { createTestApp, type TestApp } from "./app-helpers.ts";
-import { ownerClient } from "./helpers.ts";
+import { clearOutboxForTest, ownerClient } from "./helpers.ts";
 
 /** The documents the bot flow produces by itself: the quote at `cotizar`, the orders at `confirmar`. */
 describe("documents in the bot flow", () => {
@@ -22,7 +22,7 @@ describe("documents in the bot flow", () => {
     test = createTestApp({ TEMPLATES_DIR: templatesDir, DOCUMENTS_DIR: mkdtempSync(join(tmpdir(), "salvionix-flow-docs-")) });
   });
   // The outbox is shared by every test file: rows left by others would be claimed here, so start from an empty queue.
-  beforeEach(() => owner.query("update core.outbox set status = 'failed', last_error = 'cleared by a test' where status in ('pending', 'sending')"));
+  beforeEach(() => clearOutboxForTest(owner));
   afterAll(async () => {
     await test.close();
     await owner.end();
@@ -137,9 +137,25 @@ describe("documents in the bot flow", () => {
     });
   });
 
-  describe("real customers: the legal lock", () => {
+  describe("real customers: legal approval and the brand switch", () => {
+    const enableRealPdf = (setup: Setup) =>
+      owner.query("update core.brands set pdf_clientes_reales = true where id = $1", [setup.brandId]);
+
+    const withConfirmedLegal = async (check: () => Promise<void>) => {
+      const settingsFile = join(templatesDir, "settings.json");
+      const original = readFileSync(settingsFile, "utf8");
+      writeFileSync(settingsFile, original.replace('"confirmed": false', '"confirmed": true'));
+      try {
+        await check();
+      } finally {
+        writeFileSync(settingsFile, original);
+      }
+    };
+
     it("issues and sends nothing while the legal texts are not confirmed", async () => {
-      const l = await quoted(await brand(false));
+      const setup = await brand(false);
+      await enableRealPdf(setup);
+      const l = await quoted(setup);
 
       const quote = await call(l, "cotizar", QUOTE);
       const confirmation = await toConfirmation(l);
@@ -150,21 +166,29 @@ describe("documents in the bot flow", () => {
       expect(await queuedFiles(l)).toEqual([]);
     });
 
-    it("works for real customers once settings.json says the texts are confirmed", async () => {
-      const settingsFile = join(templatesDir, "settings.json");
-      const original = readFileSync(settingsFile, "utf8");
-      writeFileSync(settingsFile, original.replace('"confirmed": false', '"confirmed": true'));
-      try {
+    it("keeps internal work orders when real-customer deliveries are disabled", async () => {
+      await withConfirmedLegal(async () => {
         const l = await quoted(await brand(false));
+        const quote = await call(l, "cotizar", QUOTE);
+        const confirmation = await toConfirmation(l);
+        expect(quote.json()).toMatchObject({ pdf: "no_disponible" });
+        expect(confirmation.json()).toMatchObject({ confirmado: true, pdf: "no_disponible" });
+        expect((await documentsOf(l)).map((entry) => entry.document_type)).toEqual(["work_order"]);
+        expect(await queuedFiles(l)).toEqual([]);
+      });
+    });
 
+    it("works for real customers once the brand and legal settings allow it", async () => {
+      await withConfirmedLegal(async () => {
+        const setup = await brand(false);
+        await enableRealPdf(setup);
+        const l = await quoted(setup);
         await toConfirmation(l);
 
         const documents = await documentsOf(l);
         expect(documents.map((entry) => entry.display_number)).toEqual([expect.stringMatching(/^COT-\d{6}$/), expect.stringMatching(/^OC-\d{6}$/), expect.stringMatching(/^OT-\d{6}$/)]);
         expect((await queuedFiles(l)).map((entry) => entry.document_type)).toEqual(["quote", "purchase_order"]);
-      } finally {
-        writeFileSync(settingsFile, original);
-      }
+      });
     });
   });
 });

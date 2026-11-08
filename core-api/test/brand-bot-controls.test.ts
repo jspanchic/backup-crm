@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { dispatchToBot } from "../src/bot.ts";
 import { runOutboxOnce } from "../src/outbox.ts";
 import { createTestApp, delivery, fakePhone, post, SESSION, type TestApp } from "./app-helpers.ts";
-import { ownerClient } from "./helpers.ts";
+import { clearOutboxForTest, ownerClient } from "./helpers.ts";
 
 describe("runtime bot controls per brand", () => {
   let test: TestApp;
@@ -61,9 +61,6 @@ describe("runtime bot controls per brand", () => {
   const outboxState = async (id: number) =>
     (await owner.query("select status, attempts, last_error from core.outbox where id = $1", [id])).rows[0];
 
-  // Other suites share the throwaway database and may leave unrelated replies queued.
-  const drainOutbox = () => owner.query("update core.outbox set status = 'sent' where status in ('pending', 'sending')");
-
   it("keeps inbound messages in the CRM, skips retries and revokes existing tokens", async () => {
     const brand = await createBrand();
     const first = await receive(brand.session);
@@ -117,7 +114,7 @@ describe("runtime bot controls per brand", () => {
   });
 
   it("cancels pending and claimed bot deliveries while allowing human messages", async () => {
-    await drainOutbox();
+    await clearOutboxForTest(owner);
     test.wahaCalls.length = 0;
     const brand = await createBrand();
     const { conversationId } = await receive(brand.session);
@@ -125,8 +122,10 @@ describe("runtime bot controls per brand", () => {
     const claimed = await enqueue(conversationId, "Bot claimed", "bot");
     const pending = await enqueue(conversationId, "Bot pending", "bot");
 
-    expect(await runOutboxOnce({ ...test.outboxDeps, sleep: async () => { await setBot(brand.id, false); } }, 2))
-      .toEqual({ sent: 1, failed: 0 });
+    expect(await runOutboxOnce(test.outboxDeps)).toEqual({ sent: 1, failed: 0 });
+    await owner.query("truncate core.outbox_send_attempts");
+    expect(await runOutboxOnce({ ...test.outboxDeps, sleep: async () => { await setBot(brand.id, false); } }))
+      .toEqual({ sent: 0, failed: 0 });
     expect(await outboxState(manual)).toMatchObject({ status: "sent" });
     expect(await outboxState(claimed)).toEqual({ status: "failed", attempts: 1, last_error: "bot_disabled" });
     expect(await outboxState(pending)).toEqual({ status: "failed", attempts: 0, last_error: "bot_disabled" });
@@ -136,11 +135,12 @@ describe("runtime bot controls per brand", () => {
     expect(await outboxState(afterStop)).toMatchObject({ status: "sent" });
     await setBot(brand.id, true);
     expect(await runOutboxOnce(test.outboxDeps)).toEqual({ sent: 0, failed: 0 });
-    expect(test.wahaCalls.map((item) => JSON.parse(item.body).text)).toEqual(["Human", "Human while off"]);
+    expect(test.wahaCalls.filter((call) => call.url.endsWith("/api/sendText")).map((item) => JSON.parse(item.body).text))
+      .toEqual(["Human", "Human while off"]);
   });
 
   it("does not claim any messages when WhatsApp sending is disabled globally", async () => {
-    await drainOutbox();
+    await clearOutboxForTest(owner);
     test.wahaCalls.length = 0;
     const brand = await createBrand();
     const { conversationId } = await receive(brand.session);

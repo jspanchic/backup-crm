@@ -12,6 +12,7 @@ import { startBackground } from "../src/background.ts";
 import type { FetchLike } from "../src/bot.ts";
 import { loadConfig } from "../src/config.ts";
 import { createDb, type Db } from "../src/db.ts";
+import type { WahaFetch } from "../src/waha-client.ts";
 import { signBotRequest } from "../src/signature.ts";
 import { channelSecret } from "./app-helpers.ts";
 import { ownerClient, POSTGREST_TEST_URL, TEST_DB } from "./helpers.ts";
@@ -26,13 +27,22 @@ describe("demo with the scripted bot", () => {
   let app: BuiltApp;
   let db: Db;
   let owner: pg.Client;
-  let stop: () => void;
+  let stop: () => Promise<void>;
   let sim: SimConfig;
   let coreApiUrl: string;
   const env: NodeJS.ProcessEnv = {};
 
+  const clearOutbox = async () => {
+    await owner.query(
+      `update core.outbox set status = 'failed', claim_expires_at = null, last_error = 'cleared by demo test'
+       where status in ('pending', 'sending') or claim_expires_at is not null`,
+    );
+    await owner.query("truncate core.outbox_send_attempts");
+  };
+
   beforeAll(async () => {
     owner = await ownerClient();
+    await clearOutbox();
     await owner.query(
       `insert into core.channels (brand_id, provider, identifier, bot_key, secret_ref, is_test)
        values (1, 'waha', 'demo', 'javier', 'WAHA_HMAC_BYTOGAM_PRUEBAS', false) on conflict (provider, identifier) do nothing`,
@@ -44,8 +54,6 @@ describe("demo with the scripted bot", () => {
       POSTGREST_URL: POSTGREST_TEST_URL,
       WAHA_BASE_URL: waha.url,
       WAHA_API_KEY: "k".repeat(32),
-      OUTBOX_PACE_MIN_MS: "0",
-      OUTBOX_PACE_MAX_MS: "0",
       LOG_LEVEL: "silent",
       ADMIN_DEV_SUB: randomUUID(),
       DOCUMENTS_DIR: mkdtempSync(join(tmpdir(), "salvionix-demo-docs-")),
@@ -53,12 +61,24 @@ describe("demo with the scripted bot", () => {
     const config = loadConfig(env);
     db = createDb(config);
     const http: FetchLike = (url, init) => fetch(url, init);
+    const outboxHttp: WahaFetch = async (url, init) => {
+      const response = await fetch(url, init);
+      if (response.ok && ["/api/stopTyping", "/api/sendFile"].includes(new URL(url).pathname)) {
+        // The real rate check still runs before every mock send. Move the test's send window after delivery.
+        await owner.query(
+          `update core.outbox_send_attempts set started_at = clock_timestamp() - interval '61 seconds'
+           where started_at > clock_timestamp() - interval '1 minute'`,
+        );
+      }
+      return response;
+    };
     app = buildApp({
       config,
       env,
       db,
       fetch: http,
-      outboxFetch: http,
+      wahaFetch: outboxHttp,
+      presenceSleep: async () => {},
       proxyFetch: (url, init) => fetch(url, init),
       renderPdf: async () => Buffer.from("%PDF-1.4 demo"),
       now: () => new Date(),
@@ -73,20 +93,21 @@ describe("demo with the scripted bot", () => {
       {
         app,
         db,
-        bot: { config, env, db, fetch: http, log: app.log, now: () => new Date() },
-        outbox: { config, db, fetch: http, log: app.log, sleep: async () => {}, random: () => 0 },
+        bot: { config, env, db, fetch: http, wahaFetch: outboxHttp, presenceSleep: async () => {}, log: app.log, now: () => new Date() },
+        outbox: { config, db, fetch: outboxHttp, log: app.log, sleep: async () => {} },
       },
       { outboxMs: 100, sweepMs: 60_000, expiryMs: 60_000 },
     );
     sim = { coreApiUrl, session: "demo", hmacSecret: channelSecret() };
   });
   afterAll(async () => {
-    stop();
+    await stop();
     await app.close();
     await app.idle();
     await db.close();
     await mock.close();
     await waha.close();
+    await clearOutbox();
     await owner.end();
   });
 
@@ -150,6 +171,19 @@ describe("the simulator and the scripted bot as tools", () => {
     expect((await post("/api/sendText", { session: "s", chatId: "x@c.us", text: "t" }, { "x-api-key": "wrong" })).status).toBe(401);
     expect((await post("/api/other", {}, { "x-api-key": "s".repeat(32) })).status).toBe(404);
     expect((await post("/api/sendText", { session: "s" }, { "x-api-key": "s".repeat(32) })).status).toBe(422);
+  });
+
+  it("accepts only authenticated, valid presence requests and records no outgoing message for them", async () => {
+    const headers = { "x-api-key": "s".repeat(32) };
+    const chat = { session: "s", chatId: "12025550001@c.us" };
+    const sentBefore = waha.sent.length;
+    expect((await post("/api/sendSeen", { ...chat, messageIds: ["incoming-id"] }, headers)).status).toBe(201);
+    expect((await post("/api/startTyping", chat, headers)).status).toBe(201);
+    expect((await post("/api/stopTyping", chat, headers)).status).toBe(201);
+    expect((await post("/api/stopTyping", chat)).status).toBe(401);
+    expect((await post("/api/sendSeen", { ...chat, messageIds: [123] }, headers)).status).toBe(422);
+    expect((await fetch(`${waha.url}/api/startTyping`, { method: "POST", headers, body: "{" })).status).toBe(400);
+    expect(waha.sent).toHaveLength(sentBefore);
   });
 
   it("signs deliveries over the exact bytes it sends, in hexadecimal SHA-512, with the timestamp in milliseconds", async () => {

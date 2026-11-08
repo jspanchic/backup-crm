@@ -46,7 +46,7 @@ export const whatsappRoutes = (app: FastifyInstance, deps: AppDeps): void => {
     if (accepted.ignore) return reply.code(200).send({ status: "ignored" });
     const { message } = accepted;
 
-    const ingested = await deps.db.query<{ result: Ingested }>("select api.ingest_inbound($1, $2, $3, $4, $5, $6, $7, $8) as result", [
+    const ingested = await deps.db.query<{ result: Ingested }>("select api.ingest_inbound($1, $2, $3, $4, $5, $6, $7, $8, $9) as result", [
       "waha",
       session,
       message.providerMessageId,
@@ -55,6 +55,7 @@ export const whatsappRoutes = (app: FastifyInstance, deps: AppDeps): void => {
       message.phone,
       message.lid,
       message.pushName,
+      message.chatId,
     ]);
     const result = ingested.rows[0].result;
     if (result.status === "duplicate") return reply.code(200).send({ status: "duplicate" });
