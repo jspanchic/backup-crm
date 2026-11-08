@@ -51,10 +51,32 @@ describe("what a template can print", () => {
       customer: { name: "Ana Gómez" },
       service: { space_type: "Hogar", address: "1 Main St, Orlando, FL 32801" },
       appointment: { date: "3 de junio de 2030", technician: "Luis Pérez" },
-      quote: { total: "$207.58", subtotal: "$223.20", covered_area: "1,860 ft²", valid_until: "15 de junio de 2030", price_note: "" },
+      quote: { total: "$221.07", subtotal: "$223.20", covered_area: "1,860 ft²", valid_until: "15 de junio de 2030", price_note: "" },
     });
   });
 
+  it("prints the whole measured area, the discount as a deduction and the tax line with its rate", () => {
+    const view = buildView(data(), settings);
+
+    expect(view).toMatchObject({
+      quote: { total_area: "1,860 ft²", discount: "-$15.62", discount_class: "", tax_label: "Impuesto (6.5%)", tax: "$13.49" },
+    });
+  });
+
+  it("hides the discount row when the brand had the discount off, and when it took nothing off", () => {
+    expect(buildView(data({}, { discount_applied: false, discount: 0, tax_pct: 0, tax: 0 }), settings).quote).toMatchObject({ discount_class: "hidden", tax_label: "Impuesto (0%)", tax: "$0.00" });
+    expect(buildView(data({}, { discount: 0 }), settings).quote).toMatchObject({ discount_class: "hidden" });
+    // A quote issued before the switch existed has no flag: the discount it carries is shown.
+    const { discount_applied: _flag, tax_pct: _pct, tax: _tax, ...old } = data().payload;
+    expect(buildView(data({ payload: old }), settings).quote).toMatchObject({ discount_class: "", tax: "$0.00" });
+  });
+
+  it("keeps the words Orlando asked to drop out of the quote", () => {
+    const html = readFileSync(join(TEMPLATES, "quote.html"), "utf8").toLowerCase();
+    expect(html).not.toContain("descuento especial");
+    expect(html).not.toContain("sujeto a revisión");
+    expect(html).toContain("{{quote.tax_label}}");
+  });
   it("shows a dash where the data is missing and says the price is not confirmed", () => {
     const view = buildView(data({}, { customer_name: null, service_address: null, appointment_start_at: null, price_confirmed: false }), settings);
 

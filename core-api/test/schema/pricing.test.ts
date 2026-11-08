@@ -152,6 +152,73 @@ describe("pricing", () => {
       ).rejects.toMatchObject({ code: "CX001" });
     });
 
+    // Brand settings of migration 0018: the tax rate and the discount switch are frozen on each quote.
+    describe("tax and discount switch of the brand", () => {
+      const quoteWith = async (dealId: number, covered: number) => {
+        const { rows } = await db.query(
+          `insert into core.quotes (deal_id, covered_sqft, uncovered_sqft, inputs)
+           values ($1, $2, 0, '{}')
+           returning subtotal::float, discount::float, discount_applied, tax_pct::float, tax::float, total::float, min_applied`,
+          [dealId, covered],
+        );
+        return rows[0];
+      };
+
+      it("keeps today's amounts by default: no tax, discount on", async () => {
+        const { dealId } = await createLead(db);
+        expect(await quoteWith(dealId, 1860)).toEqual({
+          subtotal: 223.2, discount: 15.62, discount_applied: true, tax_pct: 0, tax: 0, total: 208, min_applied: false,
+        });
+      });
+
+      it("adds the tax on the amount after discount and minimum, and the total includes it", async () => {
+        await db.query("begin");
+        try {
+          await db.query("update core.brands set tax_pct = 10 where id = 1");
+          const { dealId } = await createLead(db);
+          expect(await quoteWith(dealId, 1860)).toMatchObject({ discount: 15.62, tax_pct: 10, tax: 20.8, total: 228.8 });
+          // The minimum applies before the tax: 150 + 10%.
+          const small = await createLead(db);
+          expect(await quoteWith(small.dealId, 1000)).toMatchObject({ min_applied: true, tax: 15, total: 165 });
+        } finally {
+          await db.query("rollback");
+        }
+      });
+
+      it("takes the discount off when the brand switches it off, and says so on the quote", async () => {
+        await db.query("begin");
+        try {
+          await db.query("update core.brands set discount_enabled = false, tax_pct = 10 where id = 1");
+          const { dealId } = await createLead(db);
+          expect(await quoteWith(dealId, 1860)).toEqual({
+            subtotal: 223.2, discount: 0, discount_applied: false, tax_pct: 10, tax: 22.3, total: 245.3, min_applied: false,
+          });
+        } finally {
+          await db.query("rollback");
+        }
+      });
+
+      it("freezes the rate on the quote and on the document: changing the brand later changes neither", async () => {
+        await db.query("begin");
+        try {
+          await db.query("update core.brands set tax_pct = 10 where id = 1");
+          const { dealId } = await createLead(db);
+          const quote = await quoteWith(dealId, 1860);
+          await db.query("update core.brands set tax_pct = 0, discount_enabled = false where id = 1");
+          const { rows } = await db.query(
+            `select tax_pct::float, tax::float, total::float, discount_applied from core.quotes where deal_id = $1`,
+            [dealId],
+          );
+          expect(rows[0]).toEqual({ tax_pct: 10, tax: quote.tax, total: quote.total, discount_applied: true });
+
+          const { rows: issued } = await db.query("select (api.issue_document($1, 'quote')) ->> 'id' as id", [dealId]);
+          const { rows: payload } = await db.query("select payload from core.documents where id = $1", [issued[0].id]);
+          expect(payload[0].payload).toMatchObject({ tax_pct: 10, tax: 20.8, total: 228.8, discount_applied: true });
+        } finally {
+          await db.query("rollback");
+        }
+      });
+    });
     it("cannot have two lists in force at once, and a new one leaves old quotes intact", async () => {
       await db.query("begin");
       try {

@@ -90,3 +90,13 @@ VITE_DATA_PROVIDER=core-api npm run dev
 | La demo espera y falla por tiempo | El bot no contesta: `BOT_URL_JAVIER` no apunta al bot, o `BOT_HMAC_SECRET` no coincide |
 | ❌ en "monto" o "horarios" con `--bot external` | Javier dijo algo distinto de lo que dice la base: la revisión de `responder` lo habría frenado; mira `core.reply_reviews` |
 | Sin horarios libres | El técnico de ejemplo trabaja de lunes a viernes de 09:00 a 17:00 y el horizonte es de 14 días: revisa `core.technician_availability` |
+
+## Calendario, conversación y documentos de la presentación (datos de prueba)
+
+Con `INICIAR-PRESENTACION.cmd limpio` la agenda, la conversación de la ficha y los documentos funcionan con datos ficticios (todo `is_test`; nada sale a WhatsApp):
+
+- **Agenda:** un aplicador, «Aplicador Orlando», con 60 minutos de servicio más 30 de traslado. Fines de semana de 10:00 a 19:00; entre semana de 09:00 a 22:00 **solo en sus días libres**. **La lista real de días libres no se ha entregado:** la semilla (`db/seeds/presentation/02_calendar.sql`) trae miércoles y jueves como dato **PROVISIONAL**. Se cambia sin tocar código: botón «Disponibilidad» de la agenda, o esa semilla. Las citas de ejemplo se calculan desde el día en que se carga la semilla, así que conviene encender con `limpio` el mismo día de la presentación.
+- **Conversación:** dos fichas (María Fernández y Patricia Nguyen) traen su conversación de WhatsApp con Javier.
+- **Documentos:** esos dos negocios traen cotización, orden de compra y orden de trabajo en PDF (las genera el mismo código del panel; hace falta el motor de PDF, que ahora se enciende junto con la base). Si no estaba encendido al cargar los datos, se generan con los botones del negocio.
+- **Cotización en PDF:** menos texto, metraje destacado, descuento solo si la marca lo tiene activo y una línea de impuesto con la tasa de la marca (provisional, 6,5 %). Ver `docs/PLANTILLAS_PDF.md`.
+- **Sigue como «Próximamente · 20/11»:** la agrupación de citas por zona con descuento.

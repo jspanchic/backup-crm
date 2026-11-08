@@ -332,11 +332,16 @@ describe("bot tools", () => {
       const { token } = await start();
       const quote = (await call(token, "POST", "cotizar", { tipo_cliente: "hogar", dormitorios: 3 })).json();
       expect(quote.precios_confirmados).toBe(false);
+      // The brand has no tax and the discount on by default, so today's amounts do not change.
+      expect(quote).toMatchObject({ descuento_aplicado: true, impuesto: 0, impuesto_pct: 0 });
       // `pdf` and `aviso_pdf` only tell the bot whether a PDF was queued; they carry no amount.
       expect(Object.keys(quote).sort()).toEqual([
         "aviso_pdf",
         "descuento",
+        "descuento_aplicado",
         "descuento_pct",
+        "impuesto",
+        "impuesto_pct",
         "minimo_aplicado",
         "moneda",
         "pdf",

@@ -225,6 +225,10 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
       pies_descubiertos: quote.uncovered_sqft,
       moneda: quote.currency,
       descuento_pct: quote.discount_pct,
+      // The discount switch and the tax rate belong to the brand. 	otal already includes the tax.
+      descuento_aplicado: quote.discount_applied,
+      impuesto: quote.tax,
+      impuesto_pct: quote.tax_pct,
       // The prices are examples until JM confirms them: the bot must not present them as final.
       precios_confirmados: quote.price_confirmed,
       ...pdfNotice(await documentForQuote(documents, conversationId), "la cotización"),

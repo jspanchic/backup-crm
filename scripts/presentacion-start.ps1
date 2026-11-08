@@ -83,7 +83,7 @@ $core = Join-Path $root 'core-api'
 Set-Location $core
 $npm = Join-Path $nodeDir 'npm.cmd'
 Step 'Preparando claves locales (no se muestran)' { & $npm run --silent local:init }
-Step 'Encendiendo la base de datos de la presentacion' { Compose up -d db api }
+Step 'Encendiendo la base de datos y el motor de PDF de la presentacion' { Compose up -d db api gotenberg }
 Wait-Until 'que la base de datos acepte conexiones' 90 {
   Compose exec -T db pg_isready -U postgres *> $null
   $LASTEXITCODE -eq 0
@@ -91,6 +91,9 @@ Wait-Until 'que la base de datos acepte conexiones' 90 {
 Step 'Creando roles y base' { & $npm run --silent db:bootstrap }
 Step 'Aplicando migraciones' { & $npm run --silent db:migrate }
 Step 'Cargando datos base' { & $npm run --silent db:seed }
+# The PDFs of the presentation data are made while seeding, so the PDF engine has to be answering by then.
+try { Wait-Until 'que el motor de PDF responda' 120 { Test-Url 'http://127.0.0.1:53000/health' } }
+catch { Say 'El motor de PDF no respondio: los documentos se generaran desde el panel cuando este encendido.' }
 if ($Reset) {
   Step 'Reiniciando los datos de la presentacion' { & $npm run --silent db:seed-presentacion -- --reset --yes-presentation-db }
 } else {

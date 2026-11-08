@@ -1,11 +1,8 @@
 import { useEffect, useRef } from "react";
 import { useGetList, useTranslate } from "ra-core";
-import { MessageSquare } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
-import { PreviewPlaceholder } from "../presentation/PreviewPlaceholder";
-import { isPresentationMode } from "../presentation/presentationMode";
 import type { Contact } from "../types";
 
 type Message = {
@@ -31,17 +28,9 @@ const formatSentAt = (value: string) =>
   });
 
 /** What was said in WhatsApp with this contact, oldest first. Read only: the bot and the team answer from WhatsApp. */
-export const ContactConversation = ({ contact }: { contact: Contact }) =>
-  isPresentationMode() ? (
-    <PreviewPlaceholder
-      icon={MessageSquare}
-      title="Conversación de WhatsApp"
-      description="Aquí verás la conversación del cliente con Javier y con el equipo."
-    />
-  ) : (
-    <ConversationMessages contact={contact} />
-  );
-
+export const ContactConversation = ({ contact }: { contact: Contact }) => (
+  <ConversationMessages contact={contact} />
+);
 const ConversationMessages = ({ contact }: { contact: Contact }) => {
   const translate = useTranslate();
   const end = useRef<HTMLLIElement>(null);

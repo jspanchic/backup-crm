@@ -13,19 +13,22 @@
   .muted { color: #555; font-size: 9.5pt; }
   .test { background: #b00020; color: #fff; text-align: center; font-weight: bold; padding: 4pt; margin-bottom: 12pt; }
   .test:empty { display: none; }
+  .hidden { display: none; }
   h2 { font-size: 11pt; text-transform: uppercase; letter-spacing: 0.04em; margin: 16pt 0 5pt; border-bottom: 1px solid #bbb; padding-bottom: 2pt; }
   dl { display: grid; grid-template-columns: 38% 62%; gap: 3pt 10pt; margin: 0; }
   dt { color: #555; }
   dd { margin: 0; }
-  table { width: 100%; border-collapse: collapse; }
+  .area { margin: 16pt 0 4pt; padding: 10pt 14pt; border: 2px solid #1a1a1a; background: #f3f3f3; display: flex; justify-content: space-between; align-items: center; }
+  .area .figure { font-size: 24pt; font-weight: bold; line-height: 1.1; }
+  .area .label { font-size: 10pt; text-transform: uppercase; letter-spacing: 0.04em; color: #555; }
+  .area .split { text-align: right; font-size: 10pt; color: #333; }
+  table { width: 100%; border-collapse: collapse; margin-top: 10pt; }
   td { padding: 4pt 0; border-bottom: 1px solid #ddd; }
   td:last-child { text-align: right; }
   tr.total td { font-weight: bold; font-size: 13pt; border-bottom: 2px solid #1a1a1a; }
   .terms { white-space: pre-line; font-size: 9.5pt; }
   .note { font-style: italic; color: #8a4b00; }
   .note:empty { display: none; }
-  .signatures { display: flex; gap: 30pt; margin-top: 46pt; }
-  .signatures div { flex: 1; border-top: 1px solid #1a1a1a; padding-top: 3pt; font-size: 9.5pt; }
   footer { margin-top: 24pt; font-size: 8.5pt; color: #555; border-top: 1px solid #ddd; padding-top: 6pt; }
 </style>
 </head>
@@ -35,42 +38,38 @@
   <div>
     <h1>{{document.type}}</h1>
     <div>{{legal.company_name}}</div>
-    <div class="muted">{{legal.address}} · {{legal.phone}} · {{legal.email}}</div>
-    <div class="muted">{{legal.tax_id}} · {{legal.license}}</div>
+    <div class="muted">{{legal.phone}} · {{legal.email}}</div>
   </div>
   <div class="number">
     {{document.number}}
-    <div class="muted">Emitida el {{document.issued_date}}</div>
+    <div class="muted">{{document.issued_date}}</div>
   </div>
 </header>
-<h2>Cliente</h2>
-<dl>
-  <dt>Nombre</dt><dd>{{customer.name}}</dd>
-</dl>
 
-<h2>Servicio</h2>
 <dl>
-  <dt>Tipo de espacio</dt><dd>{{service.space_type}}</dd>
+  <dt>Cliente</dt><dd>{{customer.name}}</dd>
+  <dt>Servicio</dt><dd>{{service.space_type}}</dd>
   <dt>Dirección</dt><dd>{{service.address}}</dd>
-  <dt>Tamaño del espacio</dt><dd>{{service.space_size}}</dd>
-  <dt>Área cubierta</dt><dd>{{quote.covered_area}}</dd>
-  <dt>Área descubierta</dt><dd>{{quote.uncovered_area}}</dd>
 </dl>
 
-<h2>Importe</h2>
+<div class="area">
+  <div>
+    <div class="label">Metraje que cubrimos</div>
+    <div class="figure">{{quote.total_area}}</div>
+  </div>
+  <div class="split">Cubierta: {{quote.covered_area}}<br>Descubierta: {{quote.uncovered_area}}</div>
+</div>
+
 <table>
   <tr><td>Subtotal</td><td>{{quote.subtotal}}</td></tr>
-  <tr><td>Descuento</td><td>{{quote.discount}}</td></tr>
+  <tr class="{{quote.discount_class}}"><td>Descuento</td><td>{{quote.discount}}</td></tr>
+  <tr><td>{{quote.tax_label}}</td><td>{{quote.tax}}</td></tr>
   <tr class="total"><td>Total</td><td>{{quote.total}}</td></tr>
 </table>
 <p class="note">{{quote.minimum_note}}</p>
-<p class="note">{{quote.price_note}}</p>
-<p class="muted">Cotización versión {{quote.version}}. Válida hasta: {{quote.valid_until}}.</p>
+<p class="muted {{quote.valid_class}}">Válida hasta: {{quote.valid_until}}</p>
 
-<h2>Condiciones</h2>
 <p class="terms">{{legal.quote_terms}}</p>
-<p class="terms">{{legal.payment_terms}}</p>
-<p class="terms">{{legal.cancellation_policy}}</p>
 
 <footer>{{brand.name}} · {{document.type}} {{document.number}}</footer>
 </body>

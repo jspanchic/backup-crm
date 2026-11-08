@@ -85,11 +85,23 @@ Los montos **los calcula la base**; la plantilla solo los muestra.
 |---|---|
 | `quote.version` | Versión de la cotización |
 | `quote.valid_until` | Hasta cuándo es válida |
+| `quote.valid_class` | Vacío si la cotización tiene fecha de validez; `hidden` si no (para ocultar esa línea con CSS) |
 | `quote.covered_area` / `quote.uncovered_area` | Pies cuadrados cubiertos y descubiertos |
-| `quote.subtotal`, `quote.discount`, `quote.total` | Importes con moneda, por ejemplo `$207.58` |
+| `quote.total_area` | Metraje total (cubierto más descubierto), para el bloque destacado de la cotización |
+| `quote.subtotal`, `quote.total` | Importes con moneda, por ejemplo `$221.07`. El total ya incluye el impuesto |
+| `quote.discount` | El descuento como deducción, por ejemplo `-$15.62` |
+| `quote.discount_class` | Vacío si el descuento se aplicó; `hidden` si la marca lo tenía apagado o no descontó nada (la plantilla no tiene condiciones: esa clase oculta la fila con CSS) |
+| `quote.tax_label`, `quote.tax` | `Impuesto (6.5%)` y su importe. Con tasa 0 sale `Impuesto (0%)` y `$0.00` |
 | `quote.minimum_note` | `Se aplicó el cargo mínimo del servicio.` si corresponde; si no, vacío |
-| `quote.price_note` | `Precios por confirmar.` mientras la lista de precios no esté confirmada; si no, vacío |
+| `quote.price_note` | `Precios por confirmar.` mientras la lista de precios no esté confirmada; si no, vacío (la plantilla de la cotización ya no la imprime) |
 
+**Impuesto y descuento por marca.** No son parte de la plantilla: viven en la marca (`core.brands.tax_pct` y `core.brands.discount_enabled`, migración 0018) y cada cotización los congela al crearse. Cambiarlos no toca cotizaciones ni documentos ya emitidos. Ejemplo:
+
+```sql
+update core.brands set tax_pct = 6.5, discount_enabled = false where id = 1;  -- impuesto 6,5 %, descuento apagado
+```
+
+La tasa de la semilla de la presentación (6,5 %) es **provisional**, hasta confirmarla.
 ### Datos legales (`legal.*`) — los define `settings.json`
 
 | Campo | Qué es |

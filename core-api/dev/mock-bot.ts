@@ -1,5 +1,6 @@
 import { createServer, type Server } from "node:http";
 import { safeEqualHex, signBotRequest } from "../src/signature.ts";
+import { quoteMessage } from "./quote-message.ts";
 
 /**
  * A scripted bot with the same shape of call as the real one (n8n): it receives the signed POST of the
@@ -149,14 +150,7 @@ export const startMockBot = async (options: {
         ? { tipo_cliente: "hogar", dormitorios: first, autos_techados: second ?? 0 }
         : { tipo_cliente: "empresa", pies_cubiertos: first };
       const quote = (await tool(token, "POST", "cotizar", input)).json;
-      const lines = quote.minimo_aplicado
-        ? [`*VALOR ESTIMADO: $${money(quote.total)}*`, "- Valor mínimo por servicio."]
-        : [
-            `- Subtotal: *$${money(quote.subtotal)}*`,
-            `- Descuento especial (${quote.descuento_pct}%): *-$${money(quote.descuento)}*`,
-            `*VALOR ESTIMADO: $${money(quote.total)}*`,
-          ];
-      await say([`*COTIZACIÓN*`, `- Área cubierta: *${money(quote.pies_cubiertos)}* pies cuadrados`, ...lines, "- Valor sujeto a revisión final en la visita."].join("\n"));
+      await say(quoteMessage(quote));
       return offer("¿En qué fecha te gustaría el servicio? Tengo estos horarios libres:");
     }
 

@@ -69,6 +69,9 @@ export const buildView = (data: RenderData, settings: Settings): View => {
   const date = { dateStyle: "long" } as const;
   const time = { timeStyle: "short" } as const;
   const validUntil = typeof p.quote_valid_until === "string" ? `${p.quote_valid_until}T12:00:00Z` : null;
+  // A discount row is printed only when the brand had the discount on and it took something off. Older quotes have no flag.
+  const discountShown = p.discount_applied !== false && (number(p.discount) ?? 0) > 0;
+  const percent = (value: unknown) => `${new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 2 }).format(number(value) ?? 0)}%`;
   const sqft = (value: unknown) => {
     const n = number(value);
     return n === null ? MISSING : `${new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 2 }).format(n)} ft²`;
@@ -98,10 +101,18 @@ export const buildView = (data: RenderData, settings: Settings): View => {
     quote: {
       version: text(p.quote_version),
       valid_until: validUntil ? instant(validUntil, "UTC", date) : MISSING,
+      // Hides the validity line when the quote has no date.
+      valid_class: validUntil ? "" : "hidden",
       covered_area: sqft(p.covered_sqft),
       uncovered_area: sqft(p.uncovered_sqft),
+      // The whole measured area in one figure, for the highlighted block of the quote.
+      total_area: sqft((number(p.covered_sqft) ?? 0) + (number(p.uncovered_sqft) ?? 0)),
       subtotal: money(p.subtotal, currency),
-      discount: money(p.discount, currency),
+      discount: discountShown ? money(-(number(p.discount) ?? 0), currency) : MISSING,
+      // The templates have no conditions: this class hides the discount row when the brand has the discount off.
+      discount_class: discountShown ? "" : "hidden",
+      tax_label: `Impuesto (${percent(p.tax_pct)})`,
+      tax: money(p.tax ?? 0, currency),
       total: money(p.total, currency),
       minimum_note: p.min_applied === true ? "Se aplicó el cargo mínimo del servicio." : "",
       price_note: p.price_confirmed === true ? "" : "Precios por confirmar.",

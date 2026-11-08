@@ -16,7 +16,7 @@ export type ReplyFacts = {
   allowed_reply_domains: string[];
   phone_e164: string | null;
   rates: { covered: number; uncovered: number; discount_pct: number; min_total: number } | null;
-  quote: { total: number; subtotal: number; discount: number; covered_cost: number; uncovered_cost: number } | null;
+  quote: { total: number; subtotal: number; discount: number; tax?: number; covered_cost: number; uncovered_cost: number } | null;
   appointment: { status: "hold" | "confirmed"; start_at: string; end_at: string } | null;
   /** Times shown to this conversation by horarios_libres in the last day. */
   offered_slots: { start_at: string; end_at: string }[];
@@ -58,8 +58,10 @@ const allowedAmounts = (facts: ReplyFacts): number[] => {
   const allowed: number[] = [];
   if (facts.rates) allowed.push(facts.rates.covered, facts.rates.uncovered, facts.rates.min_total);
   if (facts.quote) {
-    const { total, subtotal, discount, covered_cost, uncovered_cost } = facts.quote;
+    const { total, subtotal, discount, tax, covered_cost, uncovered_cost } = facts.quote;
     allowed.push(total, subtotal, discount, covered_cost, uncovered_cost);
+    // The tax is part of the total the database calculated, so the bot may say it. Quotes before the tax existed have none.
+    if (typeof tax === "number" && tax > 0) allowed.push(tax);
   }
   return allowed;
 };

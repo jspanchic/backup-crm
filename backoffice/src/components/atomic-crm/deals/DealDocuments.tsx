@@ -7,8 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
 import { errorKey } from "../appointments/calendarApi";
-import { PreviewPlaceholder } from "../presentation/PreviewPlaceholder";
-import { isPresentationMode } from "../presentation/presentationMode";
 import {
   downloadDocument,
   getDealDocuments,
@@ -24,24 +22,9 @@ const TYPES: DocumentType[] = ["quote", "purchase_order", "work_order"];
  * The "Documents" section of a deal: what was issued, and the buttons to generate, download and send.
  * Everything is core-api's to allow or refuse; the lock on real customers shows here as a disabled Send.
  */
-export const DealDocuments = ({ dealId }: { dealId: number }) =>
-  isPresentationMode() ? (
-    <section className="m-4" aria-labelledby="deal-documents-title">
-      <Separator className="mb-4" />
-      <h3 id="deal-documents-title" className="mb-3 font-semibold">
-        Documentos
-      </h3>
-      <PreviewPlaceholder
-        icon={FileText}
-        title="Cotización y órdenes en PDF"
-        description="Aquí verás la cotización, la orden de compra y la orden de trabajo de este negocio, listas para descargar y enviar."
-        actions={["Generar cotización", "Generar orden de compra", "Generar orden de trabajo"]}
-      />
-    </section>
-  ) : (
-    <DealDocumentsList dealId={dealId} />
-  );
-
+export const DealDocuments = ({ dealId }: { dealId: number }) => (
+  <DealDocumentsList dealId={dealId} />
+);
 const DealDocumentsList = ({ dealId }: { dealId: number }) => {
   const translate = useTranslate();
   const notify = useNotify();

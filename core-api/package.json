@@ -15,7 +15,7 @@
     "db:migrate": "node --env-file=../infra/local/.env scripts/db-migrate.ts",
     "db:seed": "node --env-file=../infra/local/.env scripts/db-seed.ts",
     "db:seed-demo": "node --env-file=../infra/local/.env scripts/db-seed-demo.ts",
-    "db:seed-presentacion": "node --env-file=../infra/local/.env scripts/db-seed-presentacion.ts",
+    "db:seed-presentacion": "node --env-file=../infra/local/.env --env-file=../infra/local/demo.env scripts/db-seed-presentacion.ts",
     "test:t6": "vitest --run --reporter=verbose test/tools.test.ts",
     "flujo": "node --env-file=../infra/local/.env --env-file=../infra/local/demo.env dev/run-flujo.ts",
     "db:baseline": "node scripts/gen-atomic-baseline.ts",

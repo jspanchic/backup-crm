@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { owner } from "../scripts/db-lib.ts";
 import { safeEqualHex, signBotRequest } from "../src/signature.ts";
+import { quoteMessage } from "./quote-message.ts";
 import { sendInbound, startWahaServer } from "./waha-sim.ts";
 
 const step = Number(process.argv[2]);
@@ -139,14 +140,7 @@ const botWork = async (contract: Contract): Promise<{ quote?: Record<string, any
     await say(SAY.saved);
   } else if (step === 3) {
     const quote = ok(await tool(token, "POST", "cotizar", { tipo_cliente: "empresa", pies_cubiertos: 2400 }), "cotizar");
-    const lines = quote.minimo_aplicado
-      ? [`*VALOR ESTIMADO: $${money(quote.total)}*`, "- Valor mínimo por servicio."]
-      : [
-          `- Subtotal: *$${money(quote.subtotal)}*`,
-          `- Descuento especial (${quote.descuento_pct}%): *-$${money(quote.descuento)}*`,
-          `*VALOR ESTIMADO: $${money(quote.total)}*`,
-        ];
-    await say(["*COTIZACIÓN*", `- Área cubierta: *${money(quote.pies_cubiertos)}* pies cuadrados`, ...lines, "- Valor sujeto a revisión final en la visita."].join("\n"));
+    await say(quoteMessage(quote));
     return { quote };
   } else {
     await say(SAY.person);
@@ -257,7 +251,8 @@ try {
   }
   if (now && step === 3 && result.quote) {
     const total = Number(result.quote.total);
-    check(Number(now.amount) === total, `El monto del negocio ($${money(Number(now.amount))}) es el que calculó la base ($${money(total)})`);
+    // The deal keeps whole dollars (the column is an integer); the quote and its PDF keep the cents.
+    check(Number(now.amount) === Math.round(total), `El monto del negocio ($${money(Number(now.amount))}) es el que calculó la base ($${money(total)}, en dólares enteros)`);
     check(now.stage === "proposal-sent", 'El negocio pasó a "Cotizado"');
     // Today `cotizar` does not leave a note. The script leaves it through the panel's own door, like a person would.
     const asked = await fetch(`${coreApiUrl}/admin/session`);
@@ -266,8 +261,10 @@ try {
     const text = [
       "Cotización calculada por Javier (precios de ejemplo, por confirmar)",
       `Área cubierta: ${money(Number(q.pies_cubiertos))} pies cuadrados.`,
-      q.minimo_aplicado ? `Valor mínimo por servicio: $${money(total)}.` : `Subtotal $${money(Number(q.subtotal))}, descuento ${q.descuento_pct}% (-$${money(Number(q.descuento))}), total $${money(total)}.`,
-    ].join("\n");
+      q.minimo_aplicado ? `Valor mínimo por servicio: $${money(total - Number(q.impuesto ?? 0))}.` : `Subtotal $${money(Number(q.subtotal))}` + (q.descuento_aplicado !== false && Number(q.descuento) > 0 ? `, descuento ${q.descuento_pct}% (-$${money(Number(q.descuento))})` : "") + ".",
+      Number(q.impuesto ?? 0) > 0 ? `Impuesto (${q.impuesto_pct}%): $${money(Number(q.impuesto))}.` : "",
+      `Total $${money(total)}.`,
+    ].filter(Boolean).join("\n");
     const note = await fetch(`${coreApiUrl}/admin/rest/deal_notes`, {
       method: "POST",
       headers: { "content-type": "application/json", prefer: "return=minimal" },
