@@ -82,7 +82,7 @@ describe("what a template can print", () => {
     const quote = data({}, { covered_sqft: 1731, uncovered_sqft: 0, subtotal: 208, discount: 15, total: 193, tax_pct: 0, tax: 0 });
     const html = renderTemplate(template, buildView(quote, settings));
     expect(html).toContain("Salvionix Biosafety Solutions");
-    expect(html).toContain("salvionix.com · +1 (630) 234-1555");
+    expect(html.split("<footer>")[1]).toContain("<br>bioseguridad.bytogam.com · +1 (630) 234-1555</footer>");
     expect(html).toContain("<td>Descuento</td><td>-$15.00</td>");
     expect(html).toContain("<td>Total</td><td>$193.00</td>");
     expect(html).toContain("transferencia bancaria, Zelle, tarjeta de débito o crédito");

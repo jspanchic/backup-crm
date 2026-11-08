@@ -17,9 +17,10 @@ import {
   errorKey,
   removeTimeOff,
   setAvailability,
+  setDatedAvailability,
   type AvailabilityWindow,
 } from "./calendarApi";
-import { localParts, todayIn, toTime, zonedInstant } from "./calendarTime";
+import { addDays, localParts, todayIn, toTime, zonedInstant } from "./calendarTime";
 import type { Technician } from "./useTechnicians";
 
 type Window = { start: string; end: string };
@@ -34,8 +35,15 @@ const weekdayName = (weekday: number) =>
     timeZone: "UTC",
   });
 
-const initialWindows = (technician: Technician): Record<number, Window[]> =>
-  Object.fromEntries(
+const initialWindows = (technician: Technician): Record<string, Window[]> => {
+  if (technician.uses_dated_availability) {
+    const dates: Record<string, Window[]> = {};
+    for (const { date, start, end } of technician.dated_availability ?? []) {
+      (dates[date] ??= []).push({ start, end });
+    }
+    return dates;
+  }
+  return Object.fromEntries(
     WEEKDAYS.map((weekday) => [
       weekday,
       technician.availability
@@ -43,8 +51,9 @@ const initialWindows = (technician: Technician): Record<number, Window[]> =>
         .map(({ start, end }) => ({ start, end })),
     ]),
   );
+};
 
-/** The weekly hours and the time off of one technician. Existing appointments are never touched: the answer says how many are left outside. */
+/** The hours and the time off of one technician. Existing appointments are never touched: the answer says how many are left outside. */
 export const AvailabilityDialog = ({
   technician,
   onClose,
@@ -59,6 +68,12 @@ export const AvailabilityDialog = ({
   const [error, setError] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
   const today = todayIn(technician.timezone);
+  const [date, setDate] = useState(() =>
+    technician.dated_availability?.find((window) => window.date > today)?.date ?? addDays(today, 1),
+  );
+  const dated = technician.uses_dated_availability;
+  const days = dated ? (date ? [date] : []) : WEEKDAYS;
+  const hoursKey = dated ? "dated_hours" : "weekly_hours";
   const [off, setOff] = useState({ fromDay: today, fromTime: "09:00", toDay: today, toTime: "17:00", reason: "" });
 
   const guard = async (action: () => Promise<void>) => {
@@ -75,10 +90,12 @@ export const AvailabilityDialog = ({
 
   const save = () =>
     guard(async () => {
-      const list: AvailabilityWindow[] = WEEKDAYS.flatMap((weekday) =>
+      const weekly: AvailabilityWindow[] = dated ? [] : WEEKDAYS.flatMap((weekday) =>
         windows[weekday].map(({ start, end }) => ({ weekday, start, end })),
       );
-      const result = await setAvailability(technician.id, list);
+      const result = dated
+        ? await setDatedAvailability(technician.id, date, windows[date] ?? [])
+        : await setAvailability(technician.id, weekly);
       notify(
         result.citas_fuera
           ? translate("resources.appointments.calendar.availability_saved_outside", { smart_count: result.citas_fuera })
@@ -113,10 +130,10 @@ export const AvailabilityDialog = ({
       onClose();
     });
 
-  const change = (weekday: number, index: number, field: keyof Window, value: string) =>
+  const change = (day: string | number, index: number, field: keyof Window, value: string) =>
     setWindows((current) => ({
       ...current,
-      [weekday]: current[weekday].map((window, position) => (position === index ? { ...window, [field]: value } : window)),
+      [day]: current[day].map((window, position) => (position === index ? { ...window, [field]: value } : window)),
     }));
 
   const format = (iso: string) => {
@@ -133,51 +150,61 @@ export const AvailabilityDialog = ({
           </DialogTitle>
         </DialogHeader>
 
-        <section className="flex flex-col gap-2" aria-label={translate("resources.appointments.calendar.weekly_hours")}>
-          <h3 className="font-semibold">{translate("resources.appointments.calendar.weekly_hours")}</h3>
-          {WEEKDAYS.map((weekday) => (
-            <div key={weekday} className="flex flex-wrap items-center gap-2" role="group" aria-label={weekdayName(weekday)}>
-              <span className="w-28 text-sm capitalize">{weekdayName(weekday)}</span>
-              {windows[weekday].length === 0 && (
-                <span className="text-sm text-muted-foreground">{translate("resources.appointments.calendar.not_available")}</span>
-              )}
-              {windows[weekday].map((window, index) => (
-                <span key={index} className="flex items-center gap-1">
-                  <Input
-                    type="time"
-                    className="w-28"
-                    aria-label={`${weekdayName(weekday)} ${translate("resources.appointments.calendar.from")}`}
-                    value={window.start}
-                    onChange={(event) => change(weekday, index, "start", event.target.value)}
-                  />
-                  –
-                  <Input
-                    type="time"
-                    className="w-28"
-                    aria-label={`${weekdayName(weekday)} ${translate("resources.appointments.calendar.to")}`}
-                    value={window.end}
-                    onChange={(event) => change(weekday, index, "end", event.target.value)}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={translate("ra.action.delete")}
-                    onClick={() => setWindows((current) => ({ ...current, [weekday]: current[weekday].filter((_, position) => position !== index) }))}
-                  >
-                    <Trash2 />
-                  </Button>
-                </span>
-              ))}
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={`${translate("resources.appointments.calendar.add_window")} ${weekdayName(weekday)}`}
-                onClick={() => setWindows((current) => ({ ...current, [weekday]: [...current[weekday], { start: "09:00", end: "17:00" }] }))}
-              >
-                <Plus />
-              </Button>
-            </div>
-          ))}
+        <section className="flex flex-col gap-2" aria-label={translate(`resources.appointments.calendar.${hoursKey}`)}>
+          <h3 className="font-semibold">{translate(`resources.appointments.calendar.${hoursKey}`)}</h3>
+          {dated && (
+            <label className="flex flex-col gap-1 text-sm">
+              {translate("resources.appointments.calendar.date")}
+              <Input className="w-44" type="date" min={today} value={date} onChange={(event) => setDate(event.target.value)} />
+            </label>
+          )}
+          {days.map((day) => {
+            const label = typeof day === "number" ? weekdayName(day) : day;
+            const dayWindows = windows[day] ?? [];
+            return (
+              <div key={day} className="flex flex-wrap items-center gap-2" role="group" aria-label={label}>
+                <span className="w-28 text-sm capitalize">{label}</span>
+                {dayWindows.length === 0 && (
+                  <span className="text-sm text-muted-foreground">{translate("resources.appointments.calendar.not_available")}</span>
+                )}
+                {dayWindows.map((window, index) => (
+                  <span key={index} className="flex items-center gap-1">
+                    <Input
+                      type="time"
+                      className="w-28"
+                      aria-label={`${label} ${translate("resources.appointments.calendar.from")}`}
+                      value={window.start}
+                      onChange={(event) => change(day, index, "start", event.target.value)}
+                    />
+                    –
+                    <Input
+                      type="time"
+                      className="w-28"
+                      aria-label={`${label} ${translate("resources.appointments.calendar.to")}`}
+                      value={window.end}
+                      onChange={(event) => change(day, index, "end", event.target.value)}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={translate("ra.action.delete")}
+                      onClick={() => setWindows((current) => ({ ...current, [day]: current[day].filter((_, position) => position !== index) }))}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </span>
+                ))}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`${translate("resources.appointments.calendar.add_window")} ${label}`}
+                  onClick={() => setWindows((current) => ({ ...current, [day]: [...(current[day] ?? []), { start: "09:00", end: "17:00" }] }))}
+                >
+                  <Plus />
+                </Button>
+              </div>
+            );
+          })}
         </section>
 
         <section className="flex flex-col gap-2" aria-label={translate("resources.appointments.calendar.time_off")}>
@@ -234,7 +261,7 @@ export const AvailabilityDialog = ({
           <Button variant="outline" onClick={onClose}>
             {translate("ra.action.close")}
           </Button>
-          <Button disabled={working} onClick={() => void save()}>
+          <Button disabled={working || (dated && (!date || date < today))} onClick={() => void save()}>
             {translate("resources.appointments.calendar.save_availability")}
           </Button>
         </DialogFooter>

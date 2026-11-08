@@ -16,6 +16,7 @@ export type AppointmentResult = {
 };
 
 export type AvailabilityWindow = { weekday: number; start: string; end: string };
+export type DatedAvailabilityWindow = { date: string; start: string; end: string };
 
 const post = async <T>(path: string, body: unknown = {}): Promise<T> => {
   const { json } = await httpClient(`${getCoreApiUrl()}/admin/agenda/${path}`, {
@@ -63,6 +64,16 @@ export const setAvailability = (
   post<{ ventanas: number; citas_fuera: number }>(
     `technicians/${technicianId}/availability`,
     { windows },
+  );
+
+export const setDatedAvailability = (
+  technicianId: number,
+  date: string,
+  windows: Pick<DatedAvailabilityWindow, "start" | "end">[],
+) =>
+  post<{ ventanas: number; citas_fuera: number }>(
+    `technicians/${technicianId}/availability`,
+    { date, windows },
   );
 
 export const addTimeOff = (

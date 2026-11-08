@@ -35,7 +35,6 @@
   <div>
     <h1>{{document.type}}</h1>
     <div>{{legal.company_name}}</div>
-    <div class="muted">{{legal.website}} · {{legal.phone}}</div>
   </div>
   <div class="number">
     {{document.number}}
@@ -74,6 +73,6 @@
   <div>{{legal.company_signature_label}}</div>
 </div>
 
-<footer>{{brand.name}} · {{document.type}} {{document.number}}</footer>
+<footer>{{brand.name}} · {{document.type}} {{document.number}}<br>{{legal.website}} · {{legal.phone}}</footer>
 </body>
 </html>

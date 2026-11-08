@@ -57,7 +57,11 @@ const quoteSchema = z
   });
 
 const escalateSchema = z.strictObject({ motivo: text(300) });
-const freeSlotsSchema = z.strictObject({ desde: z.iso.date().optional(), dias: z.int().min(1).max(14).optional() });
+const freeSlotsSchema = z.strictObject({
+  desde: z.iso.date().optional(),
+  dias: z.int().min(1).max(14).optional(),
+  zip: text(10).regex(/^[0-9]{5}(?:-[0-9]{4})?$/).optional(),
+});
 const reserveSchema = z.strictObject({ inicio: z.iso.datetime({ offset: true }) });
 const confirmSchema = z.strictObject({});
 const holderSchema = z
@@ -102,7 +106,7 @@ const pdfNotice = (outcome: DocumentOutcome, what: string) => ({
       : `No se envió ningún PDF de ${what}. No lo menciones ni lo prometas.`,
 });
 
-type ToolContext = { conversationId: number; paused: boolean; agendaEnabled: boolean; inboundMessageId?: number };
+type ToolContext = { conversationId: number; paused: boolean; inboundMessageId?: number };
 type ToolConversation = {
   conversation_id: number;
   bot_paused: boolean;
@@ -118,7 +122,7 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
   const documents = { config: deps.config, db: deps.db, renderPdf: deps.renderPdf, log: deps.log };
 
   /** Token to conversation. Nothing else identifies the customer: no tool takes an id. */
-  const authenticate = async (request: FastifyRequest, reply: FastifyReply): Promise<ToolContext | null> => {
+  const authenticate = async (request: FastifyRequest, reply: FastifyReply, agenda: boolean): Promise<ToolContext | null> => {
     const header = request.headers.authorization;
     const token = typeof header === "string" && header.startsWith("Bearer ") ? header.slice(7).trim() : "";
     const verified = token ? await verifyConversationToken(deps.config.CONVERSATION_TOKEN_SECRET, token, deps.now()) : ({ ok: false } as const);
@@ -133,6 +137,10 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
     const found = rows[0].result;
     if (!found) {
       await reply.code(401).send({ error: "invalid_token" });
+      return null;
+    }
+    if (agenda && !found.bot_agenda_enabled) {
+      await reply.code(409).send({ error: "agenda_apagada" });
       return null;
     }
     if (!found.bot_enabled) {
@@ -150,7 +158,6 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
     return {
       conversationId: found.conversation_id,
       paused: found.bot_paused,
-      agendaEnabled: found.bot_agenda_enabled,
       inboundMessageId: verified.claims.inboundMessageId,
     };
   };
@@ -179,6 +186,7 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
       if (code === "CX005") return reply.code(409).send({ error: "slot_taken", message: "Ese horario ya no está disponible. Consulta horarios_libres otra vez y ofrece otro." });
       if (code === "CX006") return reply.code(409).send({ error: "slot_not_offered", message: "Solo puedes reservar un horario que salió de horarios_libres en esta conversación." });
       if (code === "CX007") return reply.code(409).send({ error: "bot_disabled" });
+      if (code === "CX008") return reply.code(409).send({ error: "agenda_apagada" });
       throw error;
     }
   };
@@ -194,11 +202,10 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
       url,
       bodyLimit: 16_384,
       handler: async (request, reply) => {
-        const context = await authenticate(request, reply);
+        const context = await authenticate(request, reply, options.agenda ?? false);
         if (!context) return reply;
         // Pause applies to everything the bot does except reading its own card.
         if (options.pausable !== false && context.paused) return reply.code(409).send({ error: "bot_paused" });
-        if (options.agenda && !context.agendaEnabled) return reply.code(409).send({ error: "agenda_disabled" });
 
         let input = undefined as T;
         if (options.schema) {
@@ -266,10 +273,11 @@ export const toolRoutes = (app: FastifyInstance, deps: AppDeps): void => {
   const languageOf = (facts: { language: string | null }): Language => (facts.language === "en" ? "en" : "es");
 
   tool("POST", "/tools/horarios_libres", { schema: freeSlotsSchema, agenda: true }, async ({ conversationId }, input) => {
-    const { rows } = await deps.db.query<{ result: { zona_horaria: string; horarios: { inicio: string; fin: string }[] } }>(
-      "select api.free_slots($1, $2::date, $3::int) as result",
-      [conversationId, input.desde ?? null, input.dias ?? null],
+    const { rows } = await deps.db.query<{ result: { zona_horaria: string; horarios: { inicio: string; fin: string }[]; fuera_de_cobertura?: true } }>(
+      "select api.free_slots($1, $2::date, $3::int, $4) as result",
+      [conversationId, input.desde ?? null, input.dias ?? null, input.zip ?? null],
     );
+    if (rows[0].result.fuera_de_cobertura) return rows[0].result;
     const { rows: facts } = await deps.db.query<{ facts: { language: string | null } }>("select api.reply_facts($1) as facts", [conversationId]);
     const { zona_horaria, horarios } = rows[0].result;
     const language = languageOf(facts[0].facts);

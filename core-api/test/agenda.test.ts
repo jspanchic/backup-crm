@@ -211,6 +211,108 @@ describe("agenda", () => {
     });
   });
 
+  describe("dated Salvionix agenda", () => {
+    const date = day(3);
+    const datedSetup = async () => {
+      const s = await setup({ timezone: "America/New_York", technicians: 2 });
+      await owner.query(
+        "update core.technicians set name = 'Aplicador Orlando', timezone = 'America/New_York', zip_prefixes = array['327', '328', '347'] where id = $1",
+        [s.technicianIds[1]],
+      );
+      await owner.query(
+        "insert into core.technician_dated_availability (technician_id, service_date, start_time, end_time) values ($1, $2, '09:00', '17:00')",
+        [s.technicianIds[1], date],
+      );
+      return s;
+    };
+
+    const offer = (l: Lead, zip?: string, from = date) =>
+      call(l, "horarios_libres", { desde: from, dias: 1, zip });
+    const reserve = (l: Lead, start: string) => call(l, "reservar", { inicio: start });
+    const ready = async (s: Setup) => {
+      const l = await lead(s);
+      expect((await call(l, "guardar_datos", { direccion: "123 Main St, Orlando" })).statusCode).toBe(200);
+      expect((await call(l, "cotizar", { tipo_cliente: "empresa", pies_cubiertos: 1731 })).statusCode).toBe(200);
+      return l;
+    };
+
+    it("offers three Eastern times, holds for 15 minutes, confirms once and rejects a competing reservation", async () => {
+      const s = await datedSetup();
+      const [a, b] = [await ready(s), await ready(s)];
+      const response = await offer(a, "32801");
+      expect(response.statusCode, response.body).toBe(200);
+      const offered = response.json();
+      expect(offered.zona_horaria).toBe("America/New_York");
+      expect(offered.horarios).toHaveLength(3);
+      expect(offered.horarios.map((slot: { texto: string }) => slot.texto.split(", ").at(-1)))
+        .toEqual(["9:00 AM", "10:30 AM", "12:00 PM"]);
+      const start = offered.horarios[0].inicio;
+      expect([13, 14]).toContain(new Date(start).getUTCHours());
+      expect((await offer(b, "32789-1234")).json().horarios[0].inicio).toBe(start);
+
+      expect((await reserve(a, start)).statusCode).toBe(200);
+      const [hold] = (await owner.query(
+        `select technician_id::int, extract(epoch from hold_expires_at - created_at)::int as hold_seconds,
+                extract(epoch from blocked_until - end_at)::int as travel_seconds
+         from core.appointments where deal_id = $1`,
+        [a.dealId],
+      )).rows;
+      expect(hold).toEqual({ technician_id: s.technicianIds[1], hold_seconds: 900, travel_seconds: 1800 });
+      const confirmation = await call(a, "confirmar", {});
+      expect(confirmation.statusCode, confirmation.body).toBe(200);
+      expect(confirmation.json()).toMatchObject({ confirmado: true, inicio: start, pdf: "no_disponible" });
+      const { rows: documents } = await owner.query(
+        "select document_type, status from core.documents where deal_id = $1 order by id", [a.dealId],
+      );
+      expect(documents).toEqual([{ document_type: "work_order", status: "issued" }]);
+      expect((await call(a, "confirmar", {})).statusCode).toBe(409);
+      expect((await reserve(b, start)).json().error).toBe("slot_taken");
+      expect((await appointmentsOf(owner, a.dealId))[0].status).toBe("confirmed");
+      expect(await appointmentsOf(owner, b.dealId)).toEqual([]);
+    });
+
+    it("expires an unconfirmed hold and lets another covered customer take its time", async () => {
+      const s = await datedSetup();
+      const a = await ready(s);
+      const b = await lead(s);
+      const start = (await offer(a, "34787")).json().horarios[0].inicio;
+      expect((await reserve(a, start)).statusCode).toBe(200);
+      const [hold] = await appointmentsOf(owner, a.dealId);
+      await expireHold(owner, hold.id);
+
+      const expired = await call(a, "confirmar", {});
+      expect(expired.statusCode).toBe(409);
+      expect(expired.json()).toEqual({ error: "hold_expired" });
+      expect((await offer(b, "32801")).json().horarios[0].inicio).toBe(start);
+      expect((await reserve(b, start)).statusCode).toBe(200);
+      expect((await appointmentsOf(owner, a.dealId))[0].status).toBe("expired");
+    });
+
+    it("requires a ZIP, rejects uncovered ZIPs and never falls back to weekly availability", async () => {
+      const l = await lead(await datedSetup());
+      const missing = await offer(l);
+      expect(missing.statusCode).toBe(400);
+      const start = (await offer(l, "32801")).json().horarios[0].inicio;
+      expect((await offer(l)).json().horarios[0].inicio).toBe(start);
+      expect((await offer(l, "32801", day(4))).json().horarios).toEqual([]);
+      const outside = await offer(l, "33101");
+      expect(outside.statusCode).toBe(200);
+      expect(outside.json()).toEqual({ zona_horaria: "America/New_York", fuera_de_cobertura: true, horarios: [] });
+      expect((await reserve(l, start)).json().error).toBe("slot_not_offered");
+    });
+
+    it("rechecks coverage when the customer's ZIP changes after making the hold", async () => {
+      const l = await ready(await datedSetup());
+      const start = (await offer(l, "32801")).json().horarios[0].inicio;
+      expect((await reserve(l, start)).statusCode).toBe(200);
+      expect((await call(l, "guardar_datos", { zip: "33101" })).statusCode).toBe(200);
+      const confirmation = await call(l, "confirmar", {});
+      expect(confirmation.statusCode).toBe(409);
+      expect(confirmation.json().error).toBe("slot_taken");
+      expect((await appointmentsOf(owner, l.dealId))[0].status).toBe("hold");
+    });
+  });
+
   describe("reserving a time", () => {
     it("holds a time that was offered, for 15 minutes, linked to the opportunity", async () => {
       const s = await setup();

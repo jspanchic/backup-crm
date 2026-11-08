@@ -1,0 +1,15 @@
+{
+  "slot_minutes": 60,
+  "buffer_minutes": 30,
+  "technicians": [
+    {
+      "name": "Aplicador Orlando",
+      "timezone": "America/New_York",
+      "zip_prefixes": ["327", "328", "347"],
+      "windows": [
+        { "date": "2099-11-09", "start": "09:00", "end": "22:00" },
+        { "date": "2099-11-14", "start": "10:00", "end": "19:00" }
+      ]
+    }
+  ]
+}

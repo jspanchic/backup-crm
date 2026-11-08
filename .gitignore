@@ -16,3 +16,4 @@ __screenshots__/
 .vitest/
 .demo/
 core-api/.data/
+aplicadores.json

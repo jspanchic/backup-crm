@@ -47,13 +47,17 @@ const i18n = {
 
 type Written = { path: string; method: string; body: unknown };
 
-const setup = async (rows: Appointment[], answer: (path: string) => Response = () => json({ id: 99, estado: "hold" })) => {
+const setup = async (
+  rows: Appointment[],
+  answer: (path: string) => Response = () => json({ id: 99, estado: "hold" }),
+  technicianRow = technician,
+) => {
   const asked: { resource: string; filter: Record<string, unknown> }[] = [];
   const written: Written[] = [];
   const dataProvider = {
     getList: async (resource: string, params: { filter: Record<string, unknown> }) => {
       asked.push({ resource, filter: params.filter });
-      if (resource === "technicians_summary") return { data: [technician], total: 1 };
+      if (resource === "technicians_summary") return { data: [technicianRow], total: 1 };
       if (resource === "appointments") return { data: rows, total: rows.length };
       if (resource === "deals") {
         return { data: [{ id: 11, name: "Nueva consulta", stage: "opportunity", contact_ids: [21], service_address: "9 Pine Ave" }], total: 1 };
@@ -280,6 +284,29 @@ describe("AppointmentCalendar", () => {
       const body = written[0].body as { windows: { weekday: number; start: string; end: string }[] };
       expect(written[0].path).toBe("technicians/7/availability");
       expect(body.windows.map((window) => window.weekday).sort()).toEqual([1, 2, 3, 4, 6]);
+    });
+
+    it("draws and edits the technician's windows for a single date", async () => {
+      const { screen, written } = await setup([], undefined, {
+        ...technician,
+        uses_dated_availability: true,
+        dated_availability: [{ date: "2026-11-05", start: "10:00", end: "15:00" }],
+      });
+      await expect.element(screen.getByRole("gridcell", { name: "2026-11-05" }).getByTestId("availability")).toBeVisible();
+      await expect.element(screen.getByRole("gridcell", { name: "2026-11-06" }).getByTestId("availability")).not.toBeInTheDocument();
+
+      await screen.getByRole("button", { name: "resources.appointments.calendar.availability" }).click();
+      const dialog = screen.getByRole("dialog");
+      await expect.element(dialog.getByLabelText("resources.appointments.calendar.date")).toHaveValue("2026-11-05");
+      await dialog.getByLabelText("2026-11-05 resources.appointments.calendar.from").fill("11:00");
+      await dialog.getByRole("button", { name: "resources.appointments.calendar.save_availability" }).click();
+
+      await expect.poll(() => written.length).toBe(1);
+      expect(written[0]).toEqual({
+        path: "technicians/7/availability",
+        method: "POST",
+        body: { date: "2026-11-05", windows: [{ start: "11:00", end: "15:00" }] },
+      });
     });
 
     it("adds time off on the brand's clock and removes one", async () => {

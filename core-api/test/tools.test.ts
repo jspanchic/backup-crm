@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import type pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { signConversationToken } from "../src/token.ts";
@@ -476,6 +477,42 @@ describe("bot tools", () => {
       const tasks = (await owner.query("select type, text, due_date from public.tasks where contact_id = $1", [contactId])).rows;
       expect(tasks).toHaveLength(1);
       expect(tasks[0]).toMatchObject({ type: "follow-up", text: "Atender a mano: el bot pidió ayuda. Motivo: El cliente pide hablar con una persona" });
+    });
+
+    it.each([false, true])("runs the cutover recovery SQL (legacy task = %s)", async (legacy) => {
+      const { id, contactId, token, phone } = await start();
+      expect((await call(token, "POST", "escalar", { motivo: "Atención manual" })).statusCode).toBe(200);
+      const { rows: [{ task_id: taskId }] } = await owner.query<{ task_id: number }>(
+        "select escalation_task_id::int as task_id from core.conversations where id = $1",
+        [id],
+      );
+      expect(taskId).toBeGreaterThan(0);
+      if (legacy) await owner.query("update core.conversations set escalation_task_id = null where id = $1", [id]);
+      const { rows: [{ id: unrelated }] } = await owner.query<{ id: number }>(
+        "insert into public.tasks (contact_id, type, text) values ($1, 'follow-up', 'Unrelated') returning id::int",
+        [contactId],
+      );
+
+      const runbook = readFileSync(new URL("../../docs/CORTE_LUNES.md", import.meta.url), "utf8");
+      const statement = runbook.match(/WITH eligible AS MATERIALIZED \([\s\S]*?FROM resumed r CROSS JOIN attended a;/)?.[0];
+      if (!statement) throw new Error("Missing cutover recovery SQL");
+      const sql = statement.replace(":'conversation_id'", "$1").replace(":'task_id'", "$2");
+      expect((await owner.query(sql, [id, unrelated])).rows).toEqual([]);
+      expect((await owner.query("select bot_paused from core.conversations where id = $1", [id])).rows[0].bot_paused).toBe(true);
+      expect((await owner.query(sql, [id, taskId])).rows).toEqual([{
+        conversation_id: String(id),
+        bot_paused: false,
+        task_id: String(taskId),
+        done_date: expect.any(Date),
+        task_status: "atendida",
+      }]);
+      expect((await owner.query(sql, [id, taskId])).rows).toEqual([]);
+      expect((await owner.query("select done_date from public.tasks where id = $1", [unrelated])).rows[0].done_date).toBeNull();
+
+      const before = test.botCalls.length;
+      await post(test, delivery({ from: `${phone.digits}@c.us`, body: "Seguimos" }));
+      await test.app.idle();
+      expect(test.botCalls).toHaveLength(before + 1);
     });
 
     it("does not leave a second task when it is called again", async () => {

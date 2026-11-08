@@ -369,6 +369,8 @@ export const spanishCrmMessages: CrmMessages = {
         cancel_question: "¿Cancelar esta cita? El horario queda libre.",
         cancel_confirm: "Sí, cancelar",
         move: "Mover",
+        dated_hours: "Franjas por fecha",
+        date: "Fecha",
         weekly_hours: "Horario semanal",
         not_available: "No atiende",
         from: "Desde",

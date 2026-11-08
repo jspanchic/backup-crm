@@ -5,8 +5,14 @@ import type { AppDeps } from "../app.ts";
 /**
  * What the panel's calendar can do with appointments and availability. Every rule lives in the database
  * (schema api, migration 0015); this only checks the shape of the request and maps the database's
- * refusals to answers the panel can show. The production operator panel blocks these mutations.
+ * refusals to answers the panel can show. Production permits only marked operator writes.
  */
+
+declare module "fastify" {
+  interface FastifyContextConfig {
+    productionOperatorWrite?: boolean;
+  }
+}
 
 const id = z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const instant = z.string().datetime({ offset: true });
@@ -23,6 +29,10 @@ const WINDOWS = z.strictObject({
   windows: z
     .array(z.strictObject({ weekday: z.number().int().min(0).max(6), start: z.string().regex(/^\d{2}:\d{2}$/), end: z.string().regex(/^\d{2}:\d{2}$/) }))
     .max(70),
+});
+const DATED_WINDOWS = z.strictObject({
+  date: z.iso.date(),
+  windows: z.array(z.strictObject({ start: z.iso.time({ precision: -1 }), end: z.iso.time({ precision: -1 }) })).max(10),
 });
 const TIME_OFF = z.strictObject({ from: instant, to: instant, reason: z.string().trim().max(200).nullish() });
 const PARAM = z.strictObject({ id });
@@ -61,19 +71,28 @@ export const adminAgenda = (app: FastifyInstance, deps: AppDeps, cors: (request:
   const route = <B, P>(
     method: "POST" | "DELETE",
     url: string,
-    schemas: { body?: z.ZodType<B>; params?: z.ZodType<P> },
+    schemas: { body?: z.ZodType<B>; params?: z.ZodType<P>; productionOperatorWrite?: boolean },
     call: (input: { body: B; params: P }) => Promise<{ sql: string; values: unknown[] }>,
   ) =>
     app.route({
       method,
       url,
       bodyLimit: 16_384,
+      config: { productionOperatorWrite: schemas.productionOperatorWrite },
       handler: async (request, reply) => {
         cors(request, reply);
         if (!deps.config.ADMIN_DEV_SUB) return reply.code(401).send({ error: "unauthorized" });
         const params = schemas.params ? schemas.params.safeParse(request.params) : { success: true as const, data: undefined as P };
         const parsed = schemas.body ? schemas.body.safeParse(body(request)) : { success: true as const, data: undefined as B };
         if (!params.success || !parsed.success) return reply.code(400).send({ error: "invalid_input", reason: "bad_request" });
+
+        if (deps.config.NODE_ENV === "production") {
+          const { rows } = await deps.db.query<{ active: boolean }>(
+            "select api.panel_operator_active($1) as active",
+            [deps.config.ADMIN_DEV_SUB],
+          );
+          if (!rows[0].active) return reply.code(401).send({ error: "unauthorized" });
+        }
 
         const { sql, values } = await call({ body: parsed.data, params: params.data });
         try {
@@ -95,23 +114,32 @@ export const adminAgenda = (app: FastifyInstance, deps: AppDeps, cors: (request:
     sql: "select api.staff_confirm($1) as result",
     values: [params.id],
   }));
-  route("POST", "/admin/agenda/appointments/:id/cancel", { params: PARAM }, async ({ params }) => ({
-    sql: "select api.staff_cancel($1) as result",
+  route("POST", "/admin/agenda/appointments/:id/cancel", { params: PARAM, productionOperatorWrite: true }, async ({ params }) => ({
+    sql: deps.config.NODE_ENV === "production"
+      ? "select api.release_live_hold($1) as result"
+      : "select api.staff_cancel($1) as result",
     values: [params.id],
   }));
   route("POST", "/admin/agenda/appointments/:id/reschedule", { params: PARAM, body: RESCHEDULE }, async ({ params, body: input }) => ({
     sql: "select api.staff_reschedule($1, $2, $3) as result",
     values: [params.id, input.technician_id, input.start_at],
   }));
-  route("POST", "/admin/agenda/technicians/:id/availability", { params: PARAM, body: WINDOWS }, async ({ params, body: input }) => ({
+  route("POST", "/admin/agenda/technicians/:id/availability", {
+    params: PARAM,
+    body: z.union([WINDOWS, DATED_WINDOWS]),
+    productionOperatorWrite: true,
+  }, async ({ params, body: input }) => "date" in input ? {
+    sql: "select api.set_dated_availability($1, $2, $3::jsonb) as result",
+    values: [params.id, input.date, JSON.stringify(input.windows)],
+  } : {
     sql: "select api.set_availability($1, $2::jsonb) as result",
     values: [params.id, JSON.stringify(input.windows)],
-  }));
-  route("POST", "/admin/agenda/technicians/:id/time-off", { params: PARAM, body: TIME_OFF }, async ({ params, body: input }) => ({
-    sql: "select api.add_time_off($1, $2, $3, $4) as result",
+  });
+  route("POST", "/admin/agenda/technicians/:id/time-off", { params: PARAM, body: TIME_OFF, productionOperatorWrite: true }, async ({ params, body: input }) => ({
+    sql: "select api.block_technician($1, $2, $3, $4) as result",
     values: [params.id, input.from, input.to, input.reason ?? null],
   }));
-  route("DELETE", "/admin/agenda/time-off/:id", { params: PARAM }, async ({ params }) => ({
+  route("DELETE", "/admin/agenda/time-off/:id", { params: PARAM, productionOperatorWrite: true }, async ({ params }) => ({
     sql: "select api.remove_time_off($1) as result",
     values: [params.id],
   }));

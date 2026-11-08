@@ -36,9 +36,15 @@ const BLOCK_STYLE: Record<string, string> = {
 
 type Placed = { appointment: Appointment; top: number; height: number };
 
-const hoursOf = (technician: Technician, appointments: Appointment[]): [number, number] => {
-  const starts = technician.availability.map((window) => toMinutes(window.start));
-  const ends = technician.availability.map((window) => toMinutes(window.end));
+const availabilityOn = (technician: Technician, day: string): { start: string; end: string }[] =>
+  technician.uses_dated_availability
+    ? (technician.dated_availability ?? []).filter((window) => window.date === day)
+    : technician.availability.filter((window) => window.weekday === weekdayOf(day));
+
+const hoursOf = (technician: Technician, days: string[], appointments: Appointment[]): [number, number] => {
+  const windows = days.flatMap((day) => availabilityOn(technician, day));
+  const starts = windows.map((window) => toMinutes(window.start));
+  const ends = windows.map((window) => toMinutes(window.end));
   for (const appointment of appointments) {
     const start = localParts(appointment.start_at, technician.timezone).minutes;
     starts.push(start);
@@ -106,7 +112,7 @@ export const AppointmentCalendar = () => {
     );
   }
 
-  const [firstHour, lastHour] = hoursOf(technician, shown);
+  const [firstHour, lastHour] = hoursOf(technician, days, shown);
   const startMinutes = firstHour * 60;
   const height = (lastHour - firstHour) * HOUR_PX;
   const px = (minutes: number) => ((minutes - startMinutes) / 60) * HOUR_PX;
@@ -229,16 +235,14 @@ export const AppointmentCalendar = () => {
               }}
               onClick={(event) => open(day, event)}
             >
-              {technician.availability
-                .filter((window) => window.weekday === weekdayOf(day))
-                .map((window) => (
-                  <div
-                    key={window.id}
-                    data-testid="availability"
-                    className="pointer-events-none absolute inset-x-0 bg-emerald-500/10"
-                    style={{ top: px(toMinutes(window.start)), height: px(toMinutes(window.end)) - px(toMinutes(window.start)) }}
-                  />
-                ))}
+              {availabilityOn(technician, day).map((window) => (
+                <div
+                  key={window.start}
+                  data-testid="availability"
+                  className="pointer-events-none absolute inset-x-0 bg-emerald-500/10"
+                  style={{ top: px(toMinutes(window.start)), height: px(toMinutes(window.end)) - px(toMinutes(window.start)) }}
+                />
+              ))}
               {timeOffOn(day).map((period) => (
                 <div
                   key={period.id}

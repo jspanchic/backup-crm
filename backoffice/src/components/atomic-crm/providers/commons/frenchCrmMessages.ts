@@ -399,6 +399,8 @@ export const frenchCrmMessages = {
         cancel_question: "Annuler ce rendez-vous ? Le créneau redevient libre.",
         cancel_confirm: "Oui, annuler",
         move: "Déplacer",
+        dated_hours: "Horaires par date",
+        date: "Date",
         weekly_hours: "Horaires de la semaine",
         not_available: "Ne travaille pas",
         from: "De",

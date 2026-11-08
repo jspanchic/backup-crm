@@ -21,7 +21,7 @@ services:
         aliases: !override [salvionix-core-api-production]
 
   panel:
-    # Read-only operator panel via SSH tunnel to the VPS loopback.
+    # Operator panel via SSH tunnel to the VPS loopback. Only agenda actions can write.
     profiles: [panel]
     image: salvionix-crm/panel:production
     build:

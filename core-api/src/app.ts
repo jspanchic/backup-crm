@@ -7,6 +7,8 @@ import { adminProxy } from "./routes/admin-proxy.ts";
 import { toolRoutes } from "./routes/tools.ts";
 import { whatsappRoutes } from "./routes/whatsapp.ts";
 
+const JSON_CONTENT_TYPE = /^application\/json(?:;.*)?$/;
+
 export type ProxyFetch = (
   url: string,
   init: { method: string; headers: Record<string, string>; body?: Buffer; signal: AbortSignal },
@@ -45,7 +47,7 @@ export const buildApp = (deps: Omit<AppDeps, "track" | "log"> & { logger?: boole
   };
 
   app.removeAllContentTypeParsers();
-  app.addContentTypeParser(/^application\/json(;.*)?$/, { parseAs: "buffer" }, (_request, body, done) => done(null, body));
+  app.addContentTypeParser(JSON_CONTENT_TYPE, { parseAs: "buffer" }, (_request, body, done) => done(null, body));
 
   app.routesRegistered = [];
   app.addHook("onRoute", (route) => {
@@ -66,6 +68,13 @@ export const buildApp = (deps: Omit<AppDeps, "track" | "log"> & { logger?: boole
           const path = request.url.split("?", 1)[0];
           if (request.method === "GET" || request.method === "OPTIONS"
             || (request.method === "POST" && path === "/admin/rest/rpc/global_search")) return;
+          if (request.routeOptions.config.productionOperatorWrite) {
+            // A cross-origin browser POST must preflight before sending JSON to the SSH panel.
+            if (request.method === "POST" && !JSON_CONTENT_TYPE.test(request.headers["content-type"] ?? "")) {
+              return reply.code(415).send({ error: "invalid_request" });
+            }
+            return;
+          }
           return reply.code(405).send({ error: "method_not_allowed" });
         });
       }

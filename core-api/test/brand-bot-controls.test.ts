@@ -98,7 +98,7 @@ describe("runtime bot controls per brand", () => {
 
   it("rejects the three bot agenda tools for the configured brand", async () => {
     const brand = await createBrand(false);
-    await receive(brand.session);
+    const { conversationId } = await receive(brand.session);
     const token = latestToken();
     expect((await call(token, "GET", "ficha")).statusCode).toBe(200);
 
@@ -109,7 +109,15 @@ describe("runtime bot controls per brand", () => {
     ] as const) {
       const response = await call(token, "POST", name, payload);
       expect(response.statusCode).toBe(409);
-      expect(response.json()).toEqual({ error: "agenda_disabled" });
+      expect(response.json()).toEqual({ error: "agenda_apagada" });
+    }
+
+    for (const [query, args] of [
+      ["select api.free_slots($1, null, null, '32801')", [conversationId]],
+      ["select api.hold_slot($1, $2)", [conversationId, "2030-06-01T16:00:00Z"]],
+      ["select api.confirm_hold($1, $2, 'confirmation')", [conversationId, "2030-06-01T16:00:00Z"]],
+    ] as const) {
+      await expect(test.db.query(query, [...args])).rejects.toMatchObject({ code: "CX008", message: "agenda_apagada" });
     }
   });
 

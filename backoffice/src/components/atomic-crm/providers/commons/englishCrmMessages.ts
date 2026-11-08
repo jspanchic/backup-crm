@@ -395,6 +395,8 @@ export const englishCrmMessages = {
         cancel_question: "Cancel this appointment? The time becomes free.",
         cancel_confirm: "Yes, cancel",
         move: "Move",
+        dated_hours: "Hours by date",
+        date: "Date",
         weekly_hours: "Weekly hours",
         not_available: "Not working",
         from: "From",

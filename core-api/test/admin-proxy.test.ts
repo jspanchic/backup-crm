@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createSetup, day, startLead } from "./agenda-helpers.ts";
 import { ADMIN_RESOURCES } from "../src/routes/admin-proxy.ts";
 import { createTestApp, type TestApp } from "./app-helpers.ts";
-import { ownerClient, waitForPostgrest } from "./helpers.ts";
+import { createQuote, ownerClient, waitForPostgrest } from "./helpers.ts";
 import type pg from "pg";
 
 const ORIGIN = "http://127.0.0.1:5173";
@@ -226,7 +227,7 @@ describe("panel proxy", () => {
       }
     });
 
-    it("lets the loopback operator read and search without allowing mutations", async () => {
+    it("lets the loopback operator read and search without allowing unrelated mutations", async () => {
       const production = createTestApp({
         NODE_ENV: "production",
         PANEL_LOOPBACK_ADMIN: "true",
@@ -251,7 +252,8 @@ describe("panel proxy", () => {
           ["POST", "/admin/documents"],
           ["POST", "/admin/documents/1/send"],
           ["POST", "/admin/agenda/appointments"],
-          ["DELETE", "/admin/agenda/time-off/1"],
+          ["POST", "/admin/agenda/appointments/1/confirm"],
+          ["POST", "/admin/agenda/appointments/1/reschedule"],
         ] as const) {
           const response = await production.app.inject({ method, url });
           expect(response.statusCode, `${method} ${url}`).toBe(405);
@@ -259,6 +261,75 @@ describe("panel proxy", () => {
         }
       } finally {
         await production.close();
+      }
+    });
+
+    it("limits the production operator to availability, blocks and releasing live holds", async () => {
+      const sub = await person("Agenda operator", false);
+      const production = createTestApp({
+        NODE_ENV: "production",
+        PANEL_LOOPBACK_ADMIN: "true",
+        ADMIN_DEV_SUB: sub,
+      });
+      production.clock.now = new Date();
+      const bot = createTestApp();
+      const agenda = (method: "POST" | "DELETE", path: string, payload?: object) =>
+        production.app.inject({ method, url: `/admin/agenda/${path}`, payload });
+      try {
+        const setup = await createSetup(owner, { timezone: "America/New_York", minNoticeMinutes: 0 });
+        const [technician] = setup.technicianIds;
+        await owner.query("update core.technicians set timezone = 'America/New_York', zip_prefixes = '{328}' where id = $1", [technician]);
+        const date = day(3);
+        const windows = [{ start: "10:00", end: "17:00" }];
+        const path = `technicians/${technician}/availability`;
+        const saved = await agenda("POST", path, { date, windows });
+        expect(saved.statusCode, saved.body).toBe(200);
+        expect(saved.json()).toMatchObject({ ventanas: 1 });
+        const overlapping = await agenda("POST", path, {
+          date,
+          windows: [...windows, { start: "12:00", end: "15:00" }],
+        });
+        expect(overlapping.statusCode).toBe(400);
+        expect(overlapping.json()).toEqual({ error: "invalid_input", reason: "overlapping_windows" });
+
+        const listed = await production.app.inject({ method: "GET", url: `/admin/rest/technicians_summary?id=eq.${technician}` });
+        expect(listed.statusCode).toBe(200);
+        expect(listed.json()).toMatchObject([{
+          timezone: "America/New_York",
+          uses_dated_availability: true,
+          dated_availability: [{ date, ...windows[0] }],
+        }]);
+
+        const block = await agenda("POST", `technicians/${technician}/time-off`, {
+          from: `${date}T15:00:00Z`, to: `${date}T16:00:00Z`, reason: "Unavailable",
+        });
+        expect(block.statusCode, block.body).toBe(200);
+        expect((await agenda("DELETE", `time-off/${block.json().id}`)).statusCode).toBe(200);
+
+        const lead = await startLead(bot, owner, setup);
+        const book = async (confirm: boolean): Promise<number> => Number((await owner.query(
+          "select api.staff_book($1, $2, $3, '9 Pine Ave', $4) as appointment",
+          [lead.dealId, technician, `${date}T15:00:00Z`, confirm],
+        )).rows[0].appointment.id);
+        const hold = await book(false);
+        const simplePost = await production.app.inject({
+          method: "POST", url: `/admin/agenda/appointments/${hold}/cancel`, headers: { origin: "https://example.test" },
+        });
+        expect(simplePost.statusCode).toBe(415);
+        const released = await agenda("POST", `appointments/${hold}/cancel`, {});
+        expect(released.statusCode, released.body).toBe(200);
+        expect(released.json()).toMatchObject({ estado: "cancelled" });
+
+        await createQuote(owner, lead.dealId);
+        const confirmed = await book(true);
+        const protectedAppointment = await agenda("POST", `appointments/${confirmed}/cancel`, {});
+        expect(protectedAppointment.statusCode).toBe(409);
+        expect(protectedAppointment.json()).toEqual({ error: "invalid_state", reason: "not_cancellable" });
+
+        await owner.query("update public.sales set disabled = true where user_id = $1", [sub]);
+        expect((await agenda("POST", path, { date, windows })).statusCode).toBe(401);
+      } finally {
+        await Promise.all([production.close(), bot.close()]);
       }
     });
 

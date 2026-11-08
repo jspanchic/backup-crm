@@ -1,6 +1,6 @@
 import { useGetList } from "ra-core";
 
-import type { AvailabilityWindow } from "./calendarApi";
+import type { AvailabilityWindow, DatedAvailabilityWindow } from "./calendarApi";
 
 export type TimeOff = {
   id: number;
@@ -14,10 +14,12 @@ export type Technician = {
   brand_id: number;
   name: string;
   active: boolean;
-  /** The time zone of the brand: the calendar is drawn on its clock, not the browser's. */
+  /** The technician's time zone, with the brand's as fallback. */
   timezone: string;
   availability: (AvailabilityWindow & { id: number })[];
   time_off: TimeOff[];
+  uses_dated_availability?: boolean;
+  dated_availability?: DatedAvailabilityWindow[];
 };
 
 export const useTechnicians = () => {
