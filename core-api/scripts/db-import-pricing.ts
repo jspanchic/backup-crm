@@ -10,14 +10,25 @@ const decimal = (scale: number, max: number) =>
 
 const amount = decimal(2, 99_999_999.99);
 const rate = decimal(4, 999_999.9999);
-const quoteControl = z.strictObject({
-  covered_sqft: amount,
-  uncovered_sqft: amount,
+const controlResult = {
   subtotal: amount,
   discount: amount,
   total: amount,
   min_applied: z.boolean(),
-});
+};
+const quoteControl = z.union([
+  z.strictObject({ covered_sqft: amount, uncovered_sqft: amount, ...controlResult }),
+  z.strictObject({
+    inputs: z.strictObject({
+      client_type: z.literal("home"),
+      bedrooms: z.int().min(0).max(30),
+      covered_parking_cars: z.int().min(0).max(20).optional(),
+      uncovered_parking_cars: z.int().min(0).max(20).optional(),
+      extra_areas: z.array(z.strictObject({ covered: z.boolean(), sqft: amount })).max(20).optional(),
+    }),
+    ...controlResult,
+  }),
+]);
 const rulesSchema = z.strictObject({
   version: z.number().int().min(1).max(2_147_483_647),
   currency: z.literal("USD"),
@@ -34,7 +45,7 @@ const rulesSchema = z.strictObject({
   parking_extra_car_sqft: amount,
   sqm_to_sqft: rate.refine((value) => value > 0, { message: "Must be positive" }),
   pace_to_ft: rate.refine((value) => value > 0, { message: "Must be positive" }),
-  controls: z.array(quoteControl).length(3),
+  controls: z.array(quoteControl).min(3),
 });
 
 type PricingRules = z.infer<typeof rulesSchema>;
@@ -61,6 +72,14 @@ export const importPricingRules = async (
 ): Promise<"activated" | "already active"> => {
   const { tax_pct, controls, ...price } = rules;
   const payload = JSON.stringify(price);
+  const controlCases = controls.map((control) => "inputs" in control ? control : {
+    ...control,
+    inputs: {
+      client_type: "business",
+      covered_sqft: control.covered_sqft,
+      extra_areas: [{ covered: false, sqft: control.uncovered_sqft }],
+    },
+  });
 
   await db.query("begin");
   try {
@@ -106,14 +125,15 @@ export const importPricingRules = async (
     }
 
     const { rows: [failure] } = await db.query<{ covered_sqft: string; uncovered_sqft: string }>(
-      `select expected.covered_sqft, expected.uncovered_sqft
+      `select area.covered_sqft, area.uncovered_sqft
        from jsonb_to_recordset($2::jsonb)
-         as expected(covered_sqft numeric, uncovered_sqft numeric, subtotal numeric, discount numeric, total numeric, min_applied boolean)
-       cross join lateral core.quote_totals($1, expected.covered_sqft, expected.uncovered_sqft) actual
+         as expected(inputs jsonb, subtotal numeric, discount numeric, total numeric, min_applied boolean)
+       cross join lateral core.quote_area($1, expected.inputs) area
+       cross join lateral core.quote_totals($1, area.covered_sqft, area.uncovered_sqft) actual
        where row(actual.subtotal, actual.discount, actual.total, actual.min_applied)
          is distinct from row(expected.subtotal, expected.discount, expected.total, expected.min_applied)
        limit 1`,
-      [listId, JSON.stringify(controls)],
+      [listId, JSON.stringify(controlCases)],
     );
     if (failure) throw new Error(`Price control failed for ${failure.covered_sqft} covered + ${failure.uncovered_sqft} uncovered sqft`);
 
@@ -133,7 +153,7 @@ if (import.meta.main) {
   const db = await owner(process.env.PGDATABASE ?? "salvionix");
   try {
     const result = await importPricingRules(db, "salvionix", rules);
-    console.log(`Pricing version ${rules.version} ${result} (3 controls passed)`);
+    console.log(`Pricing version ${rules.version} ${result} (${rules.controls.length} controls passed)`);
   } finally {
     await db.end();
   }

@@ -35,8 +35,7 @@
   <div>
     <h1>{{document.type}}</h1>
     <div>{{legal.company_name}}</div>
-    <div class="muted">{{legal.address}} · {{legal.phone}} · {{legal.email}}</div>
-    <div class="muted">{{legal.tax_id}} · {{legal.license}}</div>
+    <div class="muted">{{legal.website}} · {{legal.phone}}</div>
   </div>
   <div class="number">
     {{document.number}}
@@ -68,9 +67,7 @@
 <p class="muted">Basada en la cotización versión {{quote.version}}.</p>
 
 <h2>Condiciones</h2>
-<p class="terms">{{legal.purchase_order_terms}}</p>
 <p class="terms">{{legal.payment_terms}}</p>
-<p class="terms">{{legal.cancellation_policy}}</p>
 
 <div class="signatures">
   <div>{{legal.customer_signature_label}}: {{customer.name}}</div>

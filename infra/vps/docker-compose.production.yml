@@ -9,7 +9,8 @@ services:
     image: salvionix-crm/core-api:production
     environment:
       NODE_ENV: production
-      ADMIN_DEV_SUB: ""
+      PANEL_LOOPBACK_ADMIN: ${PANEL_LOOPBACK_ADMIN:-false}
+      ADMIN_DEV_SUB: ${ADMIN_DEV_SUB:-}
       WAHA_HMAC_BYTOGAM_PRUEBAS: ""
       WAHA_HMAC_SALVIONIX: ${WAHA_HMAC_SALVIONIX:?missing WAHA_HMAC_SALVIONIX}
       WAHA_SEND_ENABLED: ${WAHA_SEND_ENABLED:-false}
@@ -20,7 +21,7 @@ services:
         aliases: !override [salvionix-core-api-production]
 
   panel:
-    # The panel still needs production authentication (CRM-T3).
+    # Read-only operator panel via SSH tunnel to the VPS loopback.
     profiles: [panel]
     image: salvionix-crm/panel:production
     build:

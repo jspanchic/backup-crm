@@ -1,23 +1,24 @@
 {
-  "confirmed": false,
-  "template_version": "1",
+  "confirmed": true,
+  "template_version": "2",
   "captions": {
     "quote": "Le enviamos su cotización {{number}}.",
     "purchase_order": "Le enviamos la orden de compra {{number}} para que la revise y la confirme.",
     "work_order": "Le enviamos la orden de trabajo {{number}}."
   },
   "legal": {
-    "company_name": "[POR CONFIRMAR] Razón social",
-    "tax_id": "[POR CONFIRMAR] Número de identificación fiscal",
-    "address": "[POR CONFIRMAR] Dirección de la empresa",
-    "phone": "[POR CONFIRMAR] Teléfono",
-    "email": "[POR CONFIRMAR] Correo electrónico",
-    "license": "[POR CONFIRMAR] Licencia o registro",
-    "payment_terms": "[POR CONFIRMAR] Forma y plazo de pago.",
-    "cancellation_policy": "[POR CONFIRMAR] Política de cancelación y reprogramación.",
-    "quote_terms": "[POR CONFIRMAR] Condiciones de la cotización.",
-    "purchase_order_terms": "[POR CONFIRMAR] Condiciones de la orden de compra.",
-    "work_order_terms": "[POR CONFIRMAR] Instrucciones y condiciones de la orden de trabajo.",
+    "company_name": "Salvionix Biosafety Solutions",
+    "website": "salvionix.com",
+    "phone": "+1 (630) 234-1555",
+    "tax_id": "",
+    "address": "",
+    "email": "",
+    "license": "",
+    "payment_terms": "Formas de pago: transferencia bancaria, Zelle, tarjeta de débito o crédito. El pago se realiza después del servicio.",
+    "cancellation_policy": "",
+    "quote_terms": "Exige siempre tu servicio con la garantía oficial de Vital Oxide. Solo el servicio contratado por este medio cuenta con respaldo.",
+    "purchase_order_terms": "",
+    "work_order_terms": "",
     "customer_signature_label": "Firma del cliente",
     "company_signature_label": "Por la empresa"
   }

@@ -57,8 +57,21 @@ export const buildApp = (deps: Omit<AppDeps, "track" | "log"> & { logger?: boole
   app.get("/healthz", async () => ({ status: "ok" }));
   whatsappRoutes(app, full);
   toolRoutes(app, full);
-  // Without a development identity there is no panel yet: Access arrives with CRM-T3.
-  if (deps.config.NODE_ENV !== "production" && deps.config.ADMIN_DEV_SUB) adminProxy(app, full);
+  const production = deps.config.NODE_ENV === "production";
+  if (deps.config.ADMIN_DEV_SUB && (!production || deps.config.PANEL_LOOPBACK_ADMIN)) {
+    app.register(async (admin) => {
+      if (production) {
+        admin.addHook("onRequest", async (request, reply) => {
+          // The global search RPC is read-only, but the panel sends its parameters in a POST.
+          const path = request.url.split("?", 1)[0];
+          if (request.method === "GET" || request.method === "OPTIONS"
+            || (request.method === "POST" && path === "/admin/rest/rpc/global_search")) return;
+          return reply.code(405).send({ error: "method_not_allowed" });
+        });
+      }
+      adminProxy(admin, full);
+    });
+  }
 
   app.setNotFoundHandler((_request, reply) => reply.code(404).send({ error: "not_found" }));
   app.setErrorHandler((error: { name?: string; code?: string; statusCode?: number }, request, reply) => {

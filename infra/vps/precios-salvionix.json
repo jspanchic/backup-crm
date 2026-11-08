@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "currency": "USD",
   "covered_rate": 0.12,
   "uncovered_rate": 0.06,
@@ -7,7 +7,7 @@
   "min_total": 150,
   "tax_pct": 0,
   "rounding": "salvionix_v4",
-  "area_factors_provisional": true,
+  "area_factors_provisional": false,
   "home_base_sqft": 1000,
   "home_bedroom_sqft": 140,
   "parking_first_car_sqft": 240,
@@ -17,6 +17,20 @@
   "controls": [
     { "covered_sqft": 1731, "uncovered_sqft": 0, "subtotal": 208, "discount": 15, "total": 193, "min_applied": false },
     { "covered_sqft": 8000, "uncovered_sqft": 3000, "subtotal": 1140, "discount": 80, "total": 1060, "min_applied": false },
-    { "covered_sqft": 1000, "uncovered_sqft": 0, "subtotal": 120, "discount": 8, "total": 150, "min_applied": true }
+    { "covered_sqft": 1000, "uncovered_sqft": 0, "subtotal": 120, "discount": 8, "total": 150, "min_applied": true },
+    {
+      "inputs": {
+        "client_type": "home",
+        "bedrooms": 3,
+        "covered_parking_cars": 2,
+        "extra_areas": [{ "covered": true, "sqft": 240 }, { "covered": false, "sqft": 2000 }]
+      },
+      "subtotal": 372,
+      "discount": 26,
+      "total": 346,
+      "min_applied": false
+    },
+    { "covered_sqft": 1501, "uncovered_sqft": 0, "subtotal": 180, "discount": 13, "total": 167, "min_applied": false },
+    { "covered_sqft": 1546, "uncovered_sqft": 0, "subtotal": 186, "discount": 13, "total": 173, "min_applied": false }
   ]
 }

@@ -14,7 +14,8 @@ $plataforma = 'linux/amd64'
 $vps = Read-Host 'Usuario y host SSH del VPS (usuario@host)'
 docker build --platform $plataforma -f infra/vps/core-api.Dockerfile -t salvionix-crm/core-api:production -t salvionix-crm/core-api:test .
 docker build --platform $plataforma -f infra/vps/panel.Dockerfile -t salvionix-crm/panel:test .
-docker save -o salvionix-imagenes.tar salvionix-crm/core-api:production salvionix-crm/core-api:test salvionix-crm/panel:test
+docker build --platform $plataforma --build-arg PANEL_PRESENTATION_MODE=false -f infra/vps/panel.Dockerfile -t salvionix-crm/panel:production .
+docker save -o salvionix-imagenes.tar salvionix-crm/core-api:production salvionix-crm/core-api:test salvionix-crm/panel:production salvionix-crm/panel:test
 ssh $vps 'mkdir -p ~/salvionix-crm-production ~/salvionix-crm'
 scp salvionix-imagenes.tar "${vps}:~/"
 scp infra/vps/docker-compose.yml infra/vps/docker-compose.production.yml infra/vps/gateway.nginx.template infra/vps/configure-production.sql infra/vps/precios-salvionix.json infra/vps/.env.example "${vps}:~/salvionix-crm-production/"
@@ -35,12 +36,12 @@ chmod 600 .env
 - [ ] Mantener apagado el envío durante el despliegue. El siguiente comando fuerza ese estado aunque la terminal tenga variables de otra prueba.
 
 ```bash
-crm=(docker compose --env-file .env -f docker-compose.yml -f docker-compose.production.yml)
+crm=(docker compose --env-file .env -f docker-compose.yml -f docker-compose.production.yml --profile panel)
 sql() { "${crm[@]}" exec -T db psql -X -U core_owner -d salvionix -v ON_ERROR_STOP=1 "$@"; }
-export WAHA_SEND_ENABLED=false
+export WAHA_SEND_ENABLED=false PANEL_LOOPBACK_ADMIN=false
 "${crm[@]}" config -q &&
   "${crm[@]}" stop core-api &&
-  "${crm[@]}" up -d --no-build --wait --wait-timeout 120 db migrate postgrest core-api gateway &&
+  "${crm[@]}" up -d --no-build --wait --wait-timeout 120 db migrate postgrest core-api gateway panel &&
   "${crm[@]}" up -d --no-build --no-deps --force-recreate --wait gateway
 "${crm[@]}" ps -a
 "${crm[@]}" logs --tail=25 migrate
@@ -48,13 +49,13 @@ sql < configure-production.sql
 "${crm[@]}" exec -T core-api node -e 'process.exit(process.env.BOT_URL_JAVIER?.startsWith("http://gateway:8081/webhook/") && process.env.WAHA_SEND_ENABLED === "false" ? 0 : 1)'
 ```
 
-- [ ] Cargar `precios-salvionix.json`. Las tarifas y el cálculo de Javier v4 están aprobados. Los factores para estimar metraje siguen marcados como provisionales en el archivo. Continuar si el importador confirma `3 controls passed`. Con 1.731 pies² cubiertos se esperan USD 208 de subtotal, 15 de descuento y 193 de total. Con 8.000 cubiertos y 3.000 descubiertos se esperan USD 1.140, 80 y 1.060. Por debajo del mínimo se esperan USD 150 y la marca de mínimo aplicado. [Datos reales](DATOS_REALES.md).
+- [ ] Cargar `precios-salvionix.json`, versión 2. El archivo incorpora los factores de metraje de Javier v4 con `area_factors_provisional=false`. Continuar si el importador confirma `6 controls passed`. El caso de 1.731 pies² cubiertos da USD 208 de subtotal, 15 de descuento y 193 de total. Los controles también cubren el hogar con garaje y áreas adicionales, los redondeos a 1.501 y 1.546 pies², el caso de 8.000 pies² cubiertos más 3.000 descubiertos y el mínimo de USD 150. [Datos reales](DATOS_REALES.md).
 
 ```bash
 "${crm[@]}" run --rm --no-deps -T migrate node scripts/db-import-pricing.ts - < precios-salvionix.json
 ```
 
-- [ ] Validar la base y la puerta interna. El despliegue detiene el worker anterior antes de migrar y recrea el gateway para cargar la lista nueva de rutas. En una instalación nueva, esperar impuesto 0, bot, agenda y `pdf_clientes_reales` en `f`, un canal `salvionix` real y activo, y cero técnicos, contactos y mensajes en cola. Confirmar que se aplicaron las migraciones de ritmo y PDF. Los valores iniciales del canal son 2000 ms antes del visto, 2000 ms antes de indicar escritura, 2000 ms antes de enviar y 6 envíos por minuto. Dejar el panel de producción apagado hasta contar con autenticación de operadores. [Configuración por canal](DESPLIEGUE_VPS_PRUEBAS.md#d8-ritmo-de-waha-por-canal), [envío de PDF](DATOS_REALES.md#5-envío-de-pdf-a-clientes-reales).
+- [ ] Validar la base y la puerta interna. El despliegue detiene el worker anterior antes de migrar y recrea el gateway para cargar la lista nueva de rutas. En una instalación nueva, esperar impuesto 0, bot, agenda y `pdf_clientes_reales` en `f`, un canal `salvionix` real y activo, y cero técnicos, contactos y mensajes en cola. Confirmar que se aplicaron las migraciones de ritmo y PDF. Los valores iniciales del canal son 2000 ms antes del visto, 2000 ms antes de indicar escritura, 2000 ms antes de enviar y 6 envíos por minuto. [Configuración por canal](DESPLIEGUE_VPS_PRUEBAS.md#d8-ritmo-de-waha-por-canal), [envío de PDF](DATOS_REALES.md#5-envío-de-pdf-a-clientes-reales).
 
 ```bash
 sql <<'SQL'
@@ -73,6 +74,56 @@ read -r -p 'Contenedor de n8n: ' N8N_CONTAINER
 docker exec "$N8N_CONTAINER" wget -qO- http://salvionix-core-api-production:8080/healthz
 docker exec "$N8N_CONTAINER" wget -S -O /dev/null http://salvionix-core-api-production:8080/admin/session
 # healthz = {"status":"ok"}. /admin/session = 403.
+```
+
+### Panel de operador en producción
+
+- [ ] Mantener el panel publicado únicamente en `127.0.0.1:8089` del VPS. En el primer arranque, con `PANEL_LOOPBACK_ADMIN` desactivado, comprobar desde el propio VPS que el panel responde y `/admin/session` devuelve `404`.
+
+```bash
+curl -fsS -o /dev/null http://127.0.0.1:8089/
+test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8089/admin/session)" = 404
+```
+
+- [ ] Usar el correo de un operador autorizado por Joel. El SQL obtiene el UUID de un operador activo y, en una base nueva, permite crear su identidad local de solo lectura. La cuenta nueva queda sin privilegios de administrador. El acceso al panel se concede mediante SSH.
+
+```bash
+read -r -p 'Correo del operador autorizado: ' operator_email
+if [ -n "$operator_email" ] && operator_sub=$(sql -qAt -v operator_email="$operator_email" <<'SQL'
+BEGIN;
+CREATE TEMP TABLE new_panel_user (id uuid) ON COMMIT DROP;
+WITH created AS (
+  INSERT INTO auth.users (email, raw_user_meta_data, is_sso_user)
+  VALUES (:'operator_email', '{"first_name":"Operador","last_name":"Salvionix"}', true)
+  ON CONFLICT (email) DO NOTHING
+  RETURNING id
+)
+INSERT INTO new_panel_user SELECT id FROM created;
+UPDATE public.sales SET administrator = false WHERE user_id IN (SELECT id FROM new_panel_user);
+SELECT s.user_id
+FROM public.sales s JOIN auth.users u ON u.id = s.user_id
+WHERE u.email = :'operator_email' AND NOT s.disabled;
+COMMIT;
+SQL
+) && [[ "$operator_sub" =~ ^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$ ]] &&
+   sed -i -e '/^PANEL_LOOPBACK_ADMIN=/d' -e '/^ADMIN_DEV_SUB=/d' .env &&
+   printf '%s\n' 'PANEL_LOOPBACK_ADMIN=true' "ADMIN_DEV_SUB=$operator_sub" >> .env; then
+  unset PANEL_LOOPBACK_ADMIN ADMIN_DEV_SUB
+  "${crm[@]}" config -q &&
+    "${crm[@]}" up -d --no-build --wait --wait-timeout 120 core-api panel gateway &&
+    test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8089/admin/session)" = 200 &&
+    docker exec "$N8N_CONTAINER" node -e 'fetch("http://salvionix-core-api-production:8080/admin/session").then(r => process.exit(r.status === 403 ? 0 : 1), () => process.exit(1))'
+else
+  printf '%s\n' 'Revisa la identidad del operador antes de habilitar el panel.' >&2
+fi
+unset operator_email operator_sub
+```
+
+- [ ] Abrir el túnel desde el PC, en otra terminal, y visitar `http://127.0.0.1:18089/`. Si se configuró otro `PRODUCTION_PANEL_PORT` en el VPS, ajustar el puerto remoto del túnel y las comprobaciones HTTP anteriores. Confirmar que el panel muestra los datos en modo de solo lectura.
+
+```powershell
+$vps = Read-Host 'Usuario y host SSH del VPS (usuario@host)'
+ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:18089:127.0.0.1:8089 $vps
 ```
 
 ## b. Probar en la pila aislada
@@ -116,6 +167,22 @@ test -s "$CUT_DIR/bytogam-ensayo.json" && waha bytogam-pruebas PUT "$CUT_DIR/byt
 time (test -s "$CUT_DIR/bytogam-antes.json" && waha bytogam-pruebas PUT "$CUT_DIR/bytogam-antes.json" &&
   wait_working bytogam-pruebas 20 "$CUT_DIR/bytogam-antes.json")
 ```
+
+### Si no existe la sesión de BYTOGAM
+
+- [ ] Acordar con Joel un momento sin tráfico de `salvionix` mientras la sesión sigue conectada a v4. Preparar las funciones y guardar `v4.json` según d antes de crear o aplicar `corte.json`. Confirmar que la configuración actual coincide con la guardada y hacer un `PUT` con el mismo archivo, sin editarlo. Registrar cuánto tarda la sesión en volver a `WORKING`. Este ensayo mide la recuperación de la sesión. La verificación del flujo con mensajes corresponde a e.
+
+```bash
+if test -s "$CUT_DIR/v4.json" && waha salvionix GET | jq -e --slurpfile saved "$CUT_DIR/v4.json" '
+  .name == "salvionix" and .status == "WORKING" and ({name, config} == $saved[0])
+' >/dev/null; then
+  time (waha salvionix PUT "$CUT_DIR/v4.json" && wait_working salvionix 20 "$CUT_DIR/v4.json")
+else
+  printf '%s\n' 'No ensayes hasta verificar que la sesión sigue en v4 y coincide con la configuración guardada.' >&2
+fi
+```
+
+- [ ] Si la sesión falla al volver a `WORKING` o tarda un minuto o más, aplazar el corte.
 
 ## c. Habilitar la salida a WAHA
 
@@ -253,7 +320,7 @@ Interruptor de Salvionix. Toma efecto al confirmar la actualización en la base.
 sql -c "UPDATE core.brands SET bot_enabled = false WHERE slug = 'salvionix' RETURNING slug, bot_enabled;"
 ```
 
-Para volver a Javier v4, usar la terminal preparada en d. La ruta de v4 debe seguir activa en n8n. El rollback detiene `core-api`, deja el envío apagado y restaura el webhook con el mismo `PUT` de WAHA que se ensayó en BYTOGAM. El comando tiene un límite de 55 segundos. Se considera completo cuando `core-api` está detenido y WAHA vuelve a `WORKING` con el webhook anterior. Si falla una parte, verifica ambos estados y avisa a Joel.
+Para volver a Javier v4, usar la terminal preparada en d. La ruta de v4 debe seguir activa en n8n. El rollback detiene `core-api`, deja el envío apagado y restaura el webhook con el mismo `PUT` de WAHA verificado en el ensayo de b. El comando tiene un límite de 55 segundos. Se considera completo cuando `core-api` está detenido y WAHA vuelve a `WORKING` con el webhook anterior. Si falla una parte, verifica ambos estados y avisa a Joel.
 
 ```bash
 rollback_to_v4() {
@@ -340,4 +407,22 @@ WHERE o.id = :'outbox_id'::bigint AND b.id = o.brand_id AND b.slug = 'salvionix'
   AND (o.claim_expires_at IS NULL OR o.claim_expires_at <= now())
 RETURNING o.id, o.status;
 SQL
+```
+
+## h. Activar PDF
+
+- [ ] Tras la primera hora estable, confirmar que los textos provisionales están cargados y que el operador puede revisar el PDF de control. Iniciar Gotenberg y esperar a que esté saludable. Activar el envío para Salvionix cuando la imagen confirme `confirmed=true`.
+
+```bash
+"${crm[@]}" --profile pdf pull gotenberg &&
+  "${crm[@]}" --profile pdf up -d --no-build --wait --wait-timeout 120 gotenberg &&
+  "${crm[@]}" exec -T core-api node -e 'process.exit(require("./templates/settings.json").confirmed === true ? 0 : 1)' &&
+  sql -c "UPDATE core.brands SET pdf_clientes_reales = true WHERE slug = 'salvionix' RETURNING slug, pdf_clientes_reales;"
+```
+
+- [ ] Pedir a un integrante del equipo que envíe desde su número «Quiero cotizar un local con 1731 pies cuadrados cubiertos, sin áreas descubiertas ni adicionales». Usar un contacto que recorra el flujo de cliente real. Confirmar que recibe un solo PDF, con **USD 193** de total y una fila **Descuento**. Abrir el PDF y comprobar que el recuadro con las dos oraciones de garantía de Javier v4 aparece debajo de las formas de pago. Confirmar que no contiene «valor sujeto a revisión final» ni «descuento especial».
+- [ ] Si falla el control o se necesita detener los PDF a clientes reales, apagar el interruptor de Salvionix. El cambio cancela las entregas de PDF pendientes para clientes reales. Una entrega que WAHA ya aceptó puede completarse. [Envío de PDF](DATOS_REALES.md#5-envío-de-pdf-a-clientes-reales).
+
+```bash
+sql -c "UPDATE core.brands SET pdf_clientes_reales = false WHERE slug = 'salvionix' RETURNING slug, pdf_clientes_reales;"
 ```

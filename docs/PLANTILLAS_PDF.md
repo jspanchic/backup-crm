@@ -1,7 +1,7 @@
 # Plantillas de los PDF
 
 Cómo cambiar el diseño y los textos de la cotización, la orden de compra y la orden de trabajo **sin tocar código**.
-Las plantillas de hoy son **provisionales**: sirven para probar el flujo. Los textos legales dicen `[POR CONFIRMAR]`.
+Las plantillas usan el contacto y las formas de pago provisionales de Salvionix. La cotización muestra la frase de garantía de Javier v4 en un recuadro debajo del pago.
 
 ## Qué archivo cambiar
 
@@ -106,7 +106,7 @@ La tasa de la semilla de la presentación (6,5 %) es un valor de ejemplo; `docs/
 
 | Campo | Qué es |
 |---|---|
-| `legal.company_name`, `legal.tax_id`, `legal.address`, `legal.phone`, `legal.email`, `legal.license` | Datos de la empresa |
+| `legal.company_name`, `legal.website`, `legal.phone`, `legal.tax_id`, `legal.address`, `legal.email`, `legal.license` | Datos de la empresa. Las plantillas incluidas muestran nombre, sitio web y teléfono |
 | `legal.payment_terms`, `legal.cancellation_policy` | Forma de pago y política de cancelación |
 | `legal.quote_terms`, `legal.purchase_order_terms`, `legal.work_order_terms` | Condiciones de cada documento |
 | `legal.customer_signature_label`, `legal.company_signature_label` | Rótulos de las firmas |
@@ -123,8 +123,7 @@ Para probar una carpeta de plantillas fuera del repositorio: variable `TEMPLATES
 
 ## Cuándo un cliente real puede recibir un PDF
 
-`settings.json` trae `"confirmed": false`. Mientras sea `false`, **ningún documento de un cliente real se envía por WhatsApp**
-(el envío responde `legal_unconfirmed`). Los de prueba sí. Se cambia a `true` solo cuando los textos legales estén aprobados.
+`settings.json` trae `"confirmed": true` para los textos provisionales. El envío a un cliente real requiere también que `core.brands.pdf_clientes_reales` esté encendido. El interruptor de marca arranca apagado. Si `confirmed` se cambia a `false`, el envío manual a clientes reales devuelve `legal_unconfirmed`. [Configuración del envío de PDF](DATOS_REALES.md#5-envío-de-pdf-a-clientes-reales).
 
 ## Otras cosas que se cambian en `settings.json`
 
@@ -138,4 +137,4 @@ Para probar una carpeta de plantillas fuera del repositorio: variable `TEMPLATES
 - **Plantillas en inglés:** hoy son solo en español. Para tener las dos, se duplica cada archivo y se elige por idioma del cliente (hay que pedirlo).
 - **Volver a generar un PDF ya emitido:** el documento emitido conserva el archivo con el que salió. Un rediseño solo aplica a los documentos nuevos.
 - **Enlace público `GET /d/{token}`:** depende de Access (CRM-T3). Hoy el PDF se baja desde el panel y se envía por WhatsApp.
-- **Quién emite solo:** el bot emite y envía la cotización (al cotizar) y la orden de compra (al confirmar); la orden de trabajo solo se emite. A un cliente real, nada de eso ocurre mientras `confirmed` sea `false`. Desde el panel (ficha de la oportunidad, sección Documentos) se puede generar, descargar y enviar a mano.
+- **Quién emite solo.** El bot emite y envía la cotización al cotizar y la orden de compra al confirmar cuando ambos controles permiten enviar al cliente. Con los textos confirmados, el bot puede emitir la orden de trabajo para uso interno. La edición y el envío manual desde el panel dependen del modo de acceso.

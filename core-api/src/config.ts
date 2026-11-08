@@ -28,7 +28,8 @@ const schema = z.object({
   // Where the document templates and settings.json are read from. Unset: the templates folder of this repository.
   TEMPLATES_DIR: z.string().min(1).optional(),
 
-  // Development only. Production authenticates the panel with Cloudflare Access (CRM-T3).
+  // Production can opt in to a read-only operator panel on the VPS loopback.
+  PANEL_LOOPBACK_ADMIN: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   ADMIN_DEV_SUB: z.preprocess((value) => (value === "" ? undefined : value), z.uuid().optional()),
   ADMIN_ALLOWED_ORIGINS: z.string().default("http://127.0.0.1:5173,http://localhost:5173"),
 });

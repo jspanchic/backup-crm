@@ -247,10 +247,10 @@ describe("documents as PDFs", () => {
     // The outbox is shared by every test file: rows left by others would be claimed here, so start from an empty queue.
     beforeEach(() => clearOutboxForTest(owner));
 
-    const withConfirmedLegal = async (check: () => Promise<void>) => {
+    const withLegalApproval = async (confirmed: boolean, check: () => Promise<void>) => {
       const settingsFile = join(templatesDir, "settings.json");
       const original = readFileSync(settingsFile, "utf8");
-      writeFileSync(settingsFile, original.replace('"confirmed": false', '"confirmed": true'));
+      writeFileSync(settingsFile, JSON.stringify({ ...JSON.parse(original), confirmed }));
       try {
         await check();
       } finally {
@@ -286,10 +286,16 @@ describe("documents as PDFs", () => {
       const conversationId = await openConversation(lead, false);
       const body = (await issue({ deal_id: lead.dealId, document_type: "quote" })).json();
 
-      const response = await send(body.id);
-
-      expect(response.statusCode).toBe(409);
-      expect(response.json()).toEqual({ error: "legal_unconfirmed" });
+      await enableRealPdf(true);
+      try {
+        await withLegalApproval(false, async () => {
+          const response = await send(body.id);
+          expect(response.statusCode).toBe(409);
+          expect(response.json()).toEqual({ error: "legal_unconfirmed" });
+        });
+      } finally {
+        await enableRealPdf(false);
+      }
       expect((await owner.query("select count(*)::int as n from core.outbox where conversation_id = $1", [conversationId])).rows[0].n).toBe(0);
     });
 
@@ -299,7 +305,7 @@ describe("documents as PDFs", () => {
       const body = (await issue({ deal_id: lead.dealId, document_type: "quote" })).json();
       expect((await download(body.id)).statusCode).toBe(200);
 
-      await withConfirmedLegal(async () => {
+      await withLegalApproval(true, async () => {
         const response = await send(body.id);
         expect(response.statusCode).toBe(409);
         expect(response.json()).toEqual({ error: "invalid_state", reason: "pdf_real_disabled" });
@@ -315,7 +321,7 @@ describe("documents as PDFs", () => {
       test.wahaCalls.length = 0;
       await enableRealPdf(true);
       try {
-        await withConfirmedLegal(async () => {
+        await withLegalApproval(true, async () => {
           expect((await send(body.id)).statusCode).toBe(202);
         });
         await runOutboxOnce(test.outboxDeps);
@@ -332,7 +338,7 @@ describe("documents as PDFs", () => {
       test.wahaCalls.length = 0;
       await enableRealPdf(true);
       try {
-        await withConfirmedLegal(async () => {
+        await withLegalApproval(true, async () => {
           const queued = await send(body.id);
           expect(queued.statusCode).toBe(202);
           await enableRealPdf(false);

@@ -243,8 +243,8 @@ export const runDemo = async ({ sim, waha, db, print = console.log }: DemoDeps):
   };
   const sha = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
 
-  // The bot flow issues and sends documents by itself. A real customer gets nothing while the legal texts are unconfirmed.
-  check((await one(`select count(*)::int as n from core.documents where deal_id = $1`, [first!.deal]))!.n === 0, "a Carlos (cliente real) no se le emitió ni se le envió ningún PDF solo: los textos legales siguen por confirmar");
+  // The demo brand's real delivery switch stays off. Internal work orders may still be issued.
+  check((await one(`select count(*)::int as n from core.documents where deal_id = $1 and document_type <> 'work_order'`, [first!.deal]))!.n === 0 && filesTo(carlos).length === 0, "a Carlos (cliente real) no se le emitió ni envió ningún PDF para cliente con el interruptor de marca apagado");
   const autoQuote = filesTo(tester)[0];
   check(/^PRUEBA-COT-\d{6}\.pdf$/.test(autoQuote?.file?.filename ?? "") && autoQuote.file!.bytes.subarray(0, 5).toString() === "%PDF-", "al cliente de prueba le llegó la cotización en PDF en cuanto Javier cotizó, sin que nadie la pidiera");
 
@@ -258,7 +258,7 @@ export const runDemo = async ({ sim, waha, db, print = console.log }: DemoDeps):
   const repeated = await issueDocument(first!.deal, "quote");
   check(repeated.status === 200 && repeated.json().id === quoteDocument.json().id, "pedir la cotización otra vez devuelve la misma, sin gastar otro número");
   const refused = await documents(`/${quoteDocument.json().id}/send`, { method: "POST" });
-  check(refused.status === 409 && refused.json().error === "legal_unconfirmed", "a un cliente real no se le envía nada mientras los textos legales estén por confirmar");
+  check(refused.status === 409 && refused.json().reason === "pdf_real_disabled", "el envío manual a un cliente real también queda bloqueado por el interruptor de marca");
 
   const testQuote = await issueDocument(testIds!.deal, "quote");
   check(testQuote.status === 200 && testQuote.json().display_number === autoQuote.file!.filename.replace(".pdf", ""), "la cotización de prueba ya existía (la serie de prueba no deja huecos en la numeración real): pedirla otra vez no gasta otro número");
@@ -277,7 +277,7 @@ export const runDemo = async ({ sim, waha, db, print = console.log }: DemoDeps):
   await new Promise((done) => setTimeout(done, 600));
   check(filesTo(tester).length === 3, "la orden de trabajo no se le envía al cliente");
   const listing = await documents(`?deal_id=${testIds!.deal}`);
-  check(listing.status === 200 && listing.json().documents.length === 3 && listing.json().legal_confirmed === false, "el panel ve los tres documentos de la oportunidad y que el candado legal sigue puesto");
+  check(listing.status === 200 && listing.json().documents.length === 3 && listing.json().legal_confirmed === true, "el panel ve los tres documentos de la oportunidad y los textos confirmados");
   print(`   📄 ${[quoteDocument, orderDocument, workDocument].map((d) => d.json().display_number).concat(testDocuments.map((d) => d.display_number)).join(" · ")}`);
 
   // ------------------------------------------------------------------ extra

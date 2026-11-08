@@ -35,8 +35,7 @@
   <div>
     <h1>{{document.type}}</h1>
     <div>{{legal.company_name}}</div>
-    <div class="muted">{{legal.address}} · {{legal.phone}} · {{legal.email}}</div>
-    <div class="muted">{{legal.tax_id}} · {{legal.license}}</div>
+    <div class="muted">{{legal.website}} · {{legal.phone}}</div>
   </div>
   <div class="number">
     {{document.number}}
@@ -59,9 +58,6 @@
   <dt>Área cubierta</dt><dd>{{quote.covered_area}}</dd>
   <dt>Área descubierta</dt><dd>{{quote.uncovered_area}}</dd>
 </dl>
-
-<h2>Instrucciones y condiciones</h2>
-<p class="terms">{{legal.work_order_terms}}</p>
 
 <div class="signatures">
   <div>Técnico: {{appointment.technician}}</div>

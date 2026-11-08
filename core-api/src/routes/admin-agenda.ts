@@ -5,8 +5,7 @@ import type { AppDeps } from "../app.ts";
 /**
  * What the panel's calendar can do with appointments and availability. Every rule lives in the database
  * (schema api, migration 0015); this only checks the shape of the request and maps the database's
- * refusals to answers the panel can show. Same wall as the proxy: only with a development identity, never in
- * production, until Access arrives (CRM-T3).
+ * refusals to answers the panel can show. The production operator panel blocks these mutations.
  */
 
 const id = z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER);

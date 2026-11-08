@@ -77,11 +77,21 @@ describe("what a template can print", () => {
     expect(html).toContain('<tr class="hidden"><td>Impuesto (0%)</td>');
   });
 
-  it("keeps the words Orlando asked to drop out of the quote", () => {
-    const html = readFileSync(join(TEMPLATES, "quote.html"), "utf8").toLowerCase();
-    expect(html).not.toContain("descuento especial");
-    expect(html).not.toContain("sujeto a revisión");
-    expect(html).toContain("{{quote.tax_label}}");
+  it("renders the approved quote text and the 1,731-square-foot control", () => {
+    const template = readFileSync(join(TEMPLATES, "quote.html"), "utf8");
+    const quote = data({}, { covered_sqft: 1731, uncovered_sqft: 0, subtotal: 208, discount: 15, total: 193, tax_pct: 0, tax: 0 });
+    const html = renderTemplate(template, buildView(quote, settings));
+    expect(html).toContain("Salvionix Biosafety Solutions");
+    expect(html).toContain("salvionix.com · +1 (630) 234-1555");
+    expect(html).toContain("<td>Descuento</td><td>-$15.00</td>");
+    expect(html).toContain("<td>Total</td><td>$193.00</td>");
+    expect(html).toContain("transferencia bancaria, Zelle, tarjeta de débito o crédito");
+    expect(html).toContain("después del servicio");
+    const guarantee = '<p class="terms guarantee">Exige siempre tu servicio con la garantía oficial de Vital Oxide. Solo el servicio contratado por este medio cuenta con respaldo.</p>';
+    expect(html).toContain(guarantee);
+    expect(html.indexOf(guarantee)).toBeGreaterThan(html.indexOf("después del servicio"));
+    expect(html.toLowerCase()).not.toContain("descuento especial");
+    expect(html.toLowerCase()).not.toContain("sujeto a revisión");
   });
   it("shows a dash where the data is missing and says the price is not confirmed", () => {
     const view = buildView(data({}, { customer_name: null, service_address: null, appointment_start_at: null, price_confirmed: false }), settings);
@@ -111,11 +121,9 @@ describe("what a template can print", () => {
     expect(readdirSync(TEMPLATES).sort()).toEqual([...DOCUMENT_TYPES.map((type) => `${type}.html`), "settings.json"].sort());
   });
 
-  it("ships with every legal field marked as pending and real customers blocked", () => {
-    expect(settings.confirmed).toBe(false);
-    const pending = Object.entries(settings.legal).filter(([key]) => !key.endsWith("_label"));
-    expect(pending.length).toBeGreaterThan(5);
-    for (const [, value] of pending) expect(value).toContain("[POR CONFIRMAR]");
+  it("ships with confirmed provisional text and no placeholders in the legal fields", () => {
+    expect(settings.confirmed).toBe(true);
+    expect(Object.values(settings.legal).join(" ")).not.toContain("[POR CONFIRMAR]");
   });
 });
 

@@ -93,8 +93,7 @@ services:
       postgrest:
         condition: service_started
     environment:
-      # NOT production on purpose: the /admin/* routes of the panel are only mounted outside production, with a
-      # development identity (Cloudflare Access, CRM-T3, does not exist yet). Test data only. See the guide.
+      # The test stack enables the full panel with its seeded development identity.
       NODE_ENV: development
       HOST: 0.0.0.0
       PORT: "3000"

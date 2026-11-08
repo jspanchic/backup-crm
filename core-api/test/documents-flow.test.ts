@@ -141,10 +141,10 @@ describe("documents in the bot flow", () => {
     const enableRealPdf = (setup: Setup) =>
       owner.query("update core.brands set pdf_clientes_reales = true where id = $1", [setup.brandId]);
 
-    const withConfirmedLegal = async (check: () => Promise<void>) => {
+    const withLegalApproval = async (confirmed: boolean, check: () => Promise<void>) => {
       const settingsFile = join(templatesDir, "settings.json");
       const original = readFileSync(settingsFile, "utf8");
-      writeFileSync(settingsFile, original.replace('"confirmed": false', '"confirmed": true'));
+      writeFileSync(settingsFile, JSON.stringify({ ...JSON.parse(original), confirmed }));
       try {
         await check();
       } finally {
@@ -157,17 +157,19 @@ describe("documents in the bot flow", () => {
       await enableRealPdf(setup);
       const l = await quoted(setup);
 
-      const quote = await call(l, "cotizar", QUOTE);
-      const confirmation = await toConfirmation(l);
+      await withLegalApproval(false, async () => {
+        const quote = await call(l, "cotizar", QUOTE);
+        const confirmation = await toConfirmation(l);
 
-      expect(quote.json()).toMatchObject({ pdf: "no_disponible" });
-      expect(confirmation.json()).toMatchObject({ confirmado: true, pdf: "no_disponible" });
-      expect(await documentsOf(l)).toEqual([]);
-      expect(await queuedFiles(l)).toEqual([]);
+        expect(quote.json()).toMatchObject({ pdf: "no_disponible" });
+        expect(confirmation.json()).toMatchObject({ confirmado: true, pdf: "no_disponible" });
+        expect(await documentsOf(l)).toEqual([]);
+        expect(await queuedFiles(l)).toEqual([]);
+      });
     });
 
     it("keeps internal work orders when real-customer deliveries are disabled", async () => {
-      await withConfirmedLegal(async () => {
+      await withLegalApproval(true, async () => {
         const l = await quoted(await brand(false));
         const quote = await call(l, "cotizar", QUOTE);
         const confirmation = await toConfirmation(l);
@@ -179,7 +181,7 @@ describe("documents in the bot flow", () => {
     });
 
     it("works for real customers once the brand and legal settings allow it", async () => {
-      await withConfirmedLegal(async () => {
+      await withLegalApproval(true, async () => {
         const setup = await brand(false);
         await enableRealPdf(setup);
         const l = await quoted(setup);

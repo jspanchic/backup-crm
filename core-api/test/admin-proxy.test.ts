@@ -226,6 +226,42 @@ describe("panel proxy", () => {
       }
     });
 
+    it("lets the loopback operator read and search without allowing mutations", async () => {
+      const production = createTestApp({
+        NODE_ENV: "production",
+        PANEL_LOOPBACK_ADMIN: "true",
+        ADMIN_DEV_SUB: await person("Operator", false),
+      });
+      production.clock.now = new Date();
+      try {
+        const session = await production.app.inject({ method: "GET", url: "/admin/session", headers: { origin: ORIGIN } });
+        expect(session.statusCode).toBe(200);
+        expect(session.headers["access-control-allow-origin"]).toBeUndefined();
+        expect(session.json()).toMatchObject({ first_name: "Operator", administrator: false });
+        expect((await production.app.inject({ method: "GET", url: "/admin/rest/contacts_summary?limit=1" })).statusCode).toBe(200);
+        expect((await production.app.inject({
+          method: "POST",
+          url: "/admin/rest/rpc/global_search",
+          payload: { query: "a", resources: ["contacts"], max_results: 3 },
+        })).statusCode).toBe(200);
+        for (const [method, url] of [
+          ["POST", "/admin/rest/contacts"],
+          ["PATCH", "/admin/rest/contacts?id=eq.1"],
+          ["DELETE", "/admin/rest/contacts?id=eq.1"],
+          ["POST", "/admin/documents"],
+          ["POST", "/admin/documents/1/send"],
+          ["POST", "/admin/agenda/appointments"],
+          ["DELETE", "/admin/agenda/time-off/1"],
+        ] as const) {
+          const response = await production.app.inject({ method, url });
+          expect(response.statusCode, `${method} ${url}`).toBe(405);
+          expect(response.json()).toEqual({ error: "method_not_allowed" });
+        }
+      } finally {
+        await production.close();
+      }
+    });
+
     it("answers 401 when the identity is not a user of the system, or is disabled", async () => {
       expect((await test.app.inject({ method: "GET", url: "/admin/session" })).statusCode).toBe(401);
       const sub = await person("Ana", false);
@@ -239,11 +275,12 @@ describe("panel proxy", () => {
       }
     });
 
-    it("does not exist without a development identity or in production", async () => {
+    it("does not exist without an identity or without the production opt-in", async () => {
       for (const overrides of [
         { ADMIN_DEV_SUB: undefined },
-        { NODE_ENV: "production" },
-        { NODE_ENV: "production", ADMIN_DEV_SUB: "" },
+        { NODE_ENV: "production", PANEL_LOOPBACK_ADMIN: undefined },
+        { NODE_ENV: "production", PANEL_LOOPBACK_ADMIN: "false" },
+        { NODE_ENV: "production", PANEL_LOOPBACK_ADMIN: "true", ADMIN_DEV_SUB: "" },
       ]) {
         const bare = createTestApp(overrides);
         try {

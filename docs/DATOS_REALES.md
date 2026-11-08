@@ -9,7 +9,7 @@ Hoy el CRM de la presentación corre con **datos de ejemplo**: nada de esto es r
 | Impuesto | 6,5 % | `core.brands.tax_pct` (SQL) | Cotizaciones **nuevas**: PDF, total, monto del negocio y mensaje de Javier |
 | Descuento | Activo (7 % de la lista de precios) | `core.brands.discount_enabled` (SQL) | Cotizaciones **nuevas** |
 | Precios y porcentaje del descuento | Lista de ejemplo, «por confirmar» | Una **nueva versión** de `core.price_lists` | Cotizaciones nuevas |
-| Textos legales y datos de la empresa | `[POR CONFIRMAR]` | `core-api/templates/settings.json` | Todos los PDF (ver `docs/PLANTILLAS_PDF.md`) |
+| Textos del PDF y datos de la empresa | Provisionales, con `confirmed: true` | `core-api/templates/settings.json` | Todos los PDF (ver `docs/PLANTILLAS_PDF.md`) |
 | Envío de PDF a clientes reales | Apagado | `core.brands.pdf_clientes_reales` (SQL) | Envíos por WhatsApp desde el bot y el panel |
 
 ## 1. Aplicadores, días libres, servicio y traslado
@@ -57,7 +57,7 @@ docker compose -p salvionix-presentacion -f infra/local/docker-compose.yml --env
 
 En el VPS de pruebas: `docker compose exec -T db psql -U postgres -d salvionix -c "update core.brands set tax_pct = 7 where id = 1"` desde `~/salvionix-crm`.
 
-- `tax_pct`: porcentaje, de 0 a 100. Con 0 el PDF muestra «Impuesto (0%) $0.00».
+- `tax_pct`: porcentaje, de 0 a 100. Con 0 el PDF omite la fila de impuesto.
 - `discount_enabled`: `true` o `false`. Apagado, la cotización no descuenta y el PDF **no imprime** la fila del descuento.
 - La semilla de la presentación (`db/seeds/presentation/02_brand_pricing.sql`) vuelve a poner 6,5 % y descuento activo cada vez que se carga: si cambias los valores en la base de la presentación, cambia también ese archivo.
 - `cotizar` devuelve `descuento_aplicado`, `impuesto` e `impuesto_pct`; el bot debe mencionar el descuento solo si `descuento_aplicado` es `true`.
@@ -65,13 +65,13 @@ En el VPS de pruebas: `docker compose exec -T db psql -U postgres -d salvionix -
 ## 3. Lo demás que sigue siendo de ejemplo
 
 - **Lista de precios:** la presentación usa una lista de ejemplo marcada «por confirmar». Para la lista de producción, usa el importador de la sección siguiente.
-- **Textos legales y datos de la empresa:** `core-api/templates/settings.json`. Con `confirmed: false`, el bot no emite documentos para clientes reales y el panel no permite enviarlos por WhatsApp.
+- **Textos y datos de la empresa.** `core-api/templates/settings.json` contiene el contacto, las formas de pago y la frase de garantía de Javier v4. El archivo queda en `confirmed: true` y el envío a clientes reales sigue apagado por marca.
 - **Responsable de las cuentas, canal de WhatsApp y marca:** los crea la semilla de ejemplo (`db/seeds/sample/`); la cuenta real se crea en el panel.
 - **Numeración de documentos:** la serie real (`COT`, `OC`, `OT`) empieza donde se indique en `core.document_counters`; la de prueba (`PRUEBA-*`) se reinicia con cada `limpio`.
 
 ## 4. Archivo de precios de producción
 
-Las reglas de producción están en [precios-salvionix.json](../infra/vps/precios-salvionix.json). Edita allí los valores de la marca. Para cargar un cambio, sube `version` a un número mayor. Usa números JSON con punto decimal.
+La versión 2 de producción incorpora los factores de Javier v4 en [precios-salvionix.json](../infra/vps/precios-salvionix.json). Edita allí los valores de la marca. Para cargar un cambio, sube `version` a un número mayor. Usa números JSON con punto decimal.
 
 | Campo | Qué controla |
 |---|---|
@@ -80,24 +80,27 @@ Las reglas de producción están en [precios-salvionix.json](../infra/vps/precio
 | `tax_pct` | El importador verifica que la marca esté configurada con el impuesto aprobado de 0% |
 | `rounding` | `salvionix_v4` suma y redondea hacia abajo el metraje cubierto y el descubierto por separado. Redondea el subtotal al dólar más cercano, aplica el porcentaje al subtotal redondeado y redondea el descuento al dólar más cercano. En ambos importes, medio dólar sube. El total es subtotal menos descuento y luego se aplica el mínimo. |
 | `home_base_sqft`, `home_bedroom_sqft` | Pies cuadrados base de una casa y adicional por habitación |
-| `parking_first_car_sqft`, `parking_extra_car_sqft` | Pies cuadrados por el primer auto y por cada auto adicional |
+| `parking_first_car_sqft`, `parking_extra_car_sqft` | Pies cuadrados por el primer auto y por cada auto adicional. Se usan los mismos factores en estacionamientos cubiertos y descubiertos. |
 | `sqm_to_sqft`, `pace_to_ft` | Conversión de metros cuadrados a pies cuadrados y de pasos a pies |
-| `area_factors_provisional` | `true` indica que los factores de estimación usan los valores de ejemplo hasta recibir la tabla de v4. Cambia a `false` en una nueva versión cuando se confirmen. Las tarifas y el descuento de esta lista ya están aprobados. |
-| `controls` | Tres casos con los metrajes y los resultados esperados. Recalcula sus importes y revisa cuándo se aplica el mínimo al cambiar la tarifa o la fórmula. |
+| `area_factors_provisional` | `false` en la versión 2, que usa los factores de Javier v4. |
+| `controls` | Seis casos con resultados esperados. Los controles aceptan metraje directo o `inputs` con dormitorios, estacionamientos y áreas adicionales para un hogar. Recalcula sus importes y revisa cuándo se aplica el mínimo al cambiar la tarifa o la fórmula. |
 
-Sigue el comando de [CORTE_LUNES.md](CORTE_LUNES.md). El importador activa la lista y cierra la anterior en una sola transacción si pasan los tres controles en PostgreSQL.
+Sigue el comando de [CORTE_LUNES.md](CORTE_LUNES.md). El importador activa la lista y cierra la anterior en una sola transacción cuando PostgreSQL verifica el metraje y los importes. La lista de producción debe devolver `6 controls passed`.
 
-| Pies² cubiertos | Pies² descubiertos | Subtotal | Descuento | Total | Aplica mínimo |
-|---:|---:|---:|---:|---:|---|
-| 1.731 | 0 | $208 | $15 | $193 | No |
-| 8.000 | 3.000 | $1.140 | $80 | $1.060 | No |
-| 1.000 | 0 | $120 | $8 | $150 | Sí |
+| Caso | Pies² cubiertos | Pies² descubiertos | Subtotal | Descuento | Total | Aplica mínimo |
+|---|---:|---:|---:|---:|---:|---|
+| Metraje directo | 1.731 | 0 | $208 | $15 | $193 | No |
+| Metraje directo | 8.000 | 3.000 | $1.140 | $80 | $1.060 | No |
+| Servicio mínimo | 1.000 | 0 | $120 | $8 | $150 | Sí |
+| Hogar con 3 dormitorios, 2 autos techados, 240 pies² techados y 2.000 pies² descubiertos adicionales | 2.100 | 2.000 | $372 | $26 | $346 | No |
+| Metraje directo | 1.501 | 0 | $180 | $13 | $167 | No |
+| Metraje directo | 1.546 | 0 | $186 | $13 | $173 | No |
 
 Repetir el archivo activo con las mismas reglas devuelve `already active`. Las cotizaciones emitidas conservan su lista y sus importes.
 
 ## 5. Envío de PDF a clientes reales
 
-`core.brands.pdf_clientes_reales` queda en `false` por defecto. Para enviar PDF por WhatsApp a clientes reales se requiere activarlo en la marca y confirmar los textos legales en `core-api/templates/settings.json`. El interruptor afecta tanto al bot como al panel. La emisión manual, la descarga de PDF y los envíos a clientes marcados de prueba siguen disponibles.
+`core.brands.pdf_clientes_reales` queda en `false` por defecto. Para enviar PDF por WhatsApp a clientes reales se requiere activarlo en la marca y confirmar los textos legales en `core-api/templates/settings.json`. El interruptor se aplica al bot y a los envíos manuales en entornos con permisos de escritura. El panel de producción permite consultar y descargar los PDF existentes. Los envíos a clientes marcados de prueba siguen disponibles.
 
 Consulta el estado y, cuando corresponda habilitarlo, ejecuta el `UPDATE` con la función `sql` del [procedimiento de corte](CORTE_LUNES.md).
 

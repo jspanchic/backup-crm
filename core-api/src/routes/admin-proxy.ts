@@ -47,7 +47,8 @@ const signPostgrestToken = (secret: string, sub: string, now: Date): Promise<str
 
 export const adminProxy = (app: FastifyInstance, deps: AppDeps): void => {
   const { config } = deps;
-  const origins = new Set(config.ADMIN_ALLOWED_ORIGINS.split(",").map((origin) => origin.trim()));
+  // The production panel proxies same-origin requests. Only development needs CORS.
+  const origins = new Set(config.NODE_ENV === "production" ? [] : config.ADMIN_ALLOWED_ORIGINS.split(",").map((origin) => origin.trim()));
 
   const cors = (request: FastifyRequest, reply: FastifyReply): void => {
     const origin = request.headers.origin;
@@ -73,7 +74,7 @@ export const adminProxy = (app: FastifyInstance, deps: AppDeps): void => {
     return reply.code(204).send();
   });
 
-  // Who the panel is talking as. In development this is ADMIN_DEV_SUB; with Access it will be the signed-in user.
+  // The panel uses the configured local identity until Access provides a signed-in user.
   app.get("/admin/session", async (request, reply) => {
     cors(request, reply);
     if (!config.ADMIN_DEV_SUB) return reply.code(401).send({ error: "unauthorized" });
@@ -97,7 +98,7 @@ export const adminProxy = (app: FastifyInstance, deps: AppDeps): void => {
     if (!methods) return reply.code(404).send({ error: "not_found" });
     if (!methods.includes(request.method as Method)) return reply.code(405).send({ error: "method_not_allowed" });
 
-    // Development identity. Production replaces this with the Cloudflare Access JWT (CRM-T3).
+    // Local identity for development and the opt-in production operator panel.
     if (!config.ADMIN_DEV_SUB) return reply.code(401).send({ error: "unauthorized" });
 
     const prefer = request.headers.prefer;

@@ -10,8 +10,8 @@ import { refusal } from "./admin-agenda.ts";
 
 /**
  * Quotes, purchase orders and work orders as PDFs. The database numbers and freezes each document; this
- * renders it, keeps the file and, when asked, queues it for the customer. Same wall as the rest of /admin:
- * only with a development identity, never in production, until Access arrives (CRM-T3).
+ * renders it, keeps the file and, when asked, queues it for the customer. The production operator panel
+ * can read and download existing documents.
  */
 
 const id = z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER);
